@@ -1,0 +1,35 @@
+[AutoItProject]
+; Acceptable values: 1 = application script, 2 = library (include) script
+ProjectType=1
+Name=
+; The full path to the project directory.
+Path=
+; The main script name (filename only).
+MainScriptName=
+ConfigFileName=
+; Acceptable values: 0 = if newer, 1 = always (overwrite), 2 = if not exist in project
+CopyLibPolicy=0
+
+[References]
+; Each include should be prefixed with the word 'Lib' followed by a sequential number.
+; Example: Lib1=Array.au3
+; Example: Lib2=Date.au3
+Lib1=
+
+[Details]
+; Must be a four-octet version string. Example: 1.0.2.1
+AutoItVer=3.3.6.1
+Author=
+; Must be a four-octet version string. Example: 1.0.2.1
+ScriptVer=1.0.0.0
+; Dates must be in YYYY/MM/DD format or they will be ignored.
+Date=2010/12/17
+Modified=2010/12/17
+Company=
+Copyright=
+; Any line breaks or carriage returns (multi-line) in the description must be replaced with the pipe character '|'.
+Description=
+; Acceptable values: True - the main script will contain GUI code. False - the main script will not have a GUI.
+HasGUI=False
+; Acceptable values: True - the main script requires administrative rights, False - user rights are sufficient.
+RequireAdmin=False

@@ -1,0 +1,22 @@
+AutoItProjectCreator v1.0.0.4
+By Chris Brunner (CyrusBuilt at gmail dot com)
+www.cyrusbuilt.net
+
+v1.0.0.0
+- Internal prototype release (proof of concept)
+
+v1.0.0.1
+- Internal prototype release (installer prototypes)
+
+v1.0.0.2
+- Beta release (bugfixes)
+
+v1.0.0.3
+- First official public release
+
+v1.0.0.4
+- [Added] "Now" buttons next to both date fields on the "Details" tab, which set the fields to the current system date.
+- [Added] Double-click handlers for both ListView controls in the "References" tab (as requested by "LurchMan"), but are not yet working (see code comments for details).
+- [Fixed] Proper indentation for description lines in header comment in newly created project scripts.
+- [Added] This changelog.
+- [Fixed] autoit3dir path in au3.properties file for 32bit installations. (Thanks to "Fantastic" for reporting this).

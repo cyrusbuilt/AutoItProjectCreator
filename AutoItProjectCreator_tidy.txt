@@ -1,0 +1,3258 @@
+========================================================================================================
+===  Tidy report for :D:\dev\AutoIT Dev\AutoItProjectCreator\AutoItProjectCreator.au3
+========================================================================================================
+
+00001    #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+00002    #AutoIt3Wrapper_Icon=..\..\..\..\..\Program Files (x86)\AutoIt3\Icons\au3.ico
+00003    #AutoIt3Wrapper_Outfile=AutoItProjectCreator64.exe
+00004    #AutoIt3Wrapper_Res_Description=Project creator/editor for AutoItV3
+00005    #AutoIt3Wrapper_Res_Fileversion=1.0.0.4
+00006    #AutoIt3Wrapper_Res_LegalCopyright=Released under GPLv2
+00007    #AutoIt3Wrapper_Au3Check_Parameters=-d -w 5
+00008    #AutoIt3Wrapper_Run_Tidy=y
+00009    #Tidy_Parameters=/gd /sci 1 /kv 5/ /bdir Backup
+00010    #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+00011    Opt("MustDeclareVars", 1)
+00012    
+00013  +-#cs ----------------------------------------------------------------------------
+00014  |    
+00015  |    AutoIt Version .: 3.3.6.1
+00016  |    Author .........: Chris Brunner
+00017  |    Script Version .: 1.0.0.4
+00018  |    Name ...........: AutoItProjectCreator.au3
+00019  |    Date ...........: 12/17/2010
+00020  |    Modified .......: 02/14/2011
+00021  |    Company ........: CyrusBuilt
+00022  |    Copyright ......: Released under GPLv2
+00023  |    Script Function : An AutoIt project creator and editor tool. This tool is
+00024  |    meant to be integrated with SciTE4AutoIt3 (see README), but can be used
+00025  |    standalone. Creating and editing the project itself will work fine, but after
+00026  |    changes are made, this tool attempts to launch the main script of the project
+00027  |    in SciTE.  If SciTE cannot be found, an error message will appear.
+00028  |    
+00029  |    Several of the functions in this script make use of a project info array
+00030  |    structure and a "references" array structure. These arrays are defined as
+00031  |    follows:
+00032  |    
+00033  |    Project Info Array:
+00034  |    $aProjectInfo[0] - Should always be 9. This is the count of elements (only used for validation).
+00035  |    $aProjectInfo[1] - The minimum version of AutoIt the script is compatible with (default is current).
+00036  |    $aProjectInfo[2] - The author's name.
+00037  |    $aProjectInfo[3] - The script (project) version (example: 1.0.0.5).
+00038  |    $aProjectInfo[4] - The name of the project (or script).
+00039  |    $aProjectInfo[5] - The date the project was created (defaults to current date) in YYYY/MM/DD format.
+00040  |    $aProjectInfo[6] - The date the project was modified (defaults to current date) in YYYY/MM/DD format.
+00041  |    $aProjectInfo[7] - The name of the company associated with the project.
+00042  |    $aProjectInfo[8] - The copyright information.
+00043  |    $aProjectInfo[9] - A synopsis of what the script (project) does. This is the description.
+00044  |    Unless otherwise stated, all version strings should be 4-octets period delimited.
+00045  |    
+00046  |    References info array:
+00047  |    $aReferences[0] - The count of elements in the array (used for iteration, etc).
+00048  |    $aReferences[1] - Element1
+00049  |    $aReferences[2] - Element2
+00050  |    ...
+00051  |    $aReferences[n] - ElementN
+00052  |    And so on. The references should not be full include statements. They should
+00053  |    just be the name and/or path to the include (ie. "Array.au3" or "lib\mylib.au3").
+00054  |    If the include is a name only, then it is assumed that it exists in the
+00055  |    standard includes folder in AutoIt's installation path. If a relative path
+00056  |    is provided (ie. "lib\mylib.au3"), it is assumed that it exists as a child
+00057  |    of the project folder. Note: adding the main script of the project to itself
+00058  |    as an include is prohibited... as it should be. Full paths are supported
+00059  |    (ie. "C:\my libs folder\mylib\mylib.au3").
+00060  |    
+00061  |    Command-line arguments supported:
+00062  |    filename.au3proj - If an AutoIt3 project file (*.au3proj) is specified,
+00063  |    it will be opened by AutoItProjectCreator.
+00064  |    
+00065  |    /opendlg - This causes AutoItProject creator to prompt the user with file
+00066  |    browser dialog to browse for an existing AutoIt3 project file to open.
+00067  |    
+00068  +-#ce ----------------------------------------------------------------------------
+00069    
+00070    #Region Includes
+00071    #include <Array.au3>
+00072    #include <ButtonConstants.au3>
+00073    #include <ComboConstants.au3>
+00074    #include <Date.au3>
+00075    #include <DateTimeConstants.au3>
+00076    #include <EditConstants.au3>
+00077    #include <File.au3>
+00078    #include <GuiComboBox.au3>
+00079    #include <GUIConstantsEx.au3>
+00080    #include <GUIDateTimePicker.au3>
+00081    #include <GuiListView.au3>
+00082    #include <ListViewConstants.au3>
+00083    #include <StaticConstants.au3>
+00084    #include <TabConstants.au3>
+00085    #include <WindowsConstants.au3>
+00086    #include <lib\FileLib.au3>
+00087    #EndRegion Includes
+00088    
+00089    #Region Script Constants
+00090    Global Const $MY_NAME = "AutoItProjectCreator"
+00091    Global Const $HOME = @ScriptDir & "\"
+00092    Global Const $CONFIG = $HOME & $MY_NAME & ".ini"
+00093    Global Const $PROJECT_FILE_EXT = "au3proj"
+00094    #EndRegion Script Constants
+00095    
+00096    #Region Project Type Constants
+00097    Global Const $PROJ_TYPE_APP = 1
+00098    Global Const $PROJ_TYPE_LIB = 2
+00099    #EndRegion Project Type Constants
+00100    
+00101    #Region Copy Include Policy Constants
+00102    Global Const $CP_IFNEWER = 0
+00103    Global Const $CP_ALWAYS = 1
+00104    Global Const $CP_IFNOTEXIST = 2
+00105    #EndRegion Copy Include Policy Constants
+00106    
+00107    #Region Script Globals
+00108    Global $iWasLoaded = False
+00109    Global $iOpenFromCmdLine = False
+00110    Global $projectFile = ""
+00111    Global $FormMain = 0
+00112    Global $TabMain = 0
+00113    Global $TabSheet1 = 0
+00114    Global $GroupType = 0
+00115    Global $RadioLib = 0
+00116    Global $RadioApp = 0
+00117    Global $GroupName = 0
+00118    Global $InputProjName = 0
+00119    Global $LabelName = 0
+00120    Global $InputLocation = 0
+00121    Global $ButtonProjectBrowse = 0
+00122    Global $LabelProjectsDir = 0
+00123    Global $LabelFullPath = 0
+00124    Global $InputFullPath = 0
+00125    Global $CheckboxMakeDefault = 0
+00126    Global $TabSheet2 = 0
+00127    Global $ListViewSourceLibs = 0
+00128    Global $ListViewTargetLibs = 0
+00129    Global $ButtonAddLib = 0
+00130    Global $ButtonRemoveLib = 0
+00131    Global $ButtonBrowseLib = 0
+00132    Global $TabSheet3 = 0
+00133    Global $LabelAutoItVer = 0
+00134    Global $InputAuthor = 0
+00135    Global $LabelAuthor = 0
+00136    Global $LabelScriptVer = 0
+00137    Global $InputAutoItVer = 0
+00138    Global $InputScriptVer = 0
+00139    Global $LabelDate = 0
+00140    Global $LabelDateModified = 0
+00141    Global $InputCompany = 0
+00142    Global $LabelCompany = 0
+00143    Global $InputCopyright = 0
+00144    Global $LabelCopyright = 0
+00145    Global $EditDescription = 0
+00146    Global $LabelDescription = 0
+00147    Global $DateCreated = 0
+00148    Global $DateModified = 0
+00149    Global $ButtonCancel = 0
+00150    Global $ButtonCreate = 0
+00151    Global $InputMainScript = 0
+00152    Global $LabelMainScript = 0
+00153    Global $CheckboxRequireAdmin = 0
+00154    Global $CheckboxHasGui = 0
+00155    Global $ButtonOpenProj = 0
+00156    Global $InputConfigName = 0
+00157    Global $LabelConfigName = 0
+00158    Global $CheckboxUseConfig = 0
+00159    Global $ComboCopyPolicy = 0
+00160    Global $LabelCopyLibPolicy = 0
+00161    Global $ButtonCurrDateNow = 0
+00162    Global $ButtonModDateNow = 0
+00163    #EndRegion Script Globals
+00164    
+00165    #Region Utility Functions
+00166    ; #FUNCTION# ====================================================================================================================
+00167    ; Name...........: _GetMyVersion
+00168    ; Description ...: Gets the version of this script. If not compiled, the file version of the script file is retrieved. If compiled,
+00169    ;                  the running version of the .exe is retrieved.
+00170    ; Syntax.........: _GetMyVersion()
+00171    ; Parameters ....: None.
+00172    ; Return values .: The current version of this script.
+00173    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00174    ; Modified.......:
+00175    ; Remarks .......:
+00176    ; Related .......:
+00177    ; Link ..........;
+00178    ; Example .......;
+00179    ; ===============================================================================================================================
+00180  +-Func _GetMyVersion()
+00181  |  +-If (@Compiled) Then
+00182  |  |    Return FileGetVersion(@AutoItExe)
+00183  |  +-EndIf
+00184  |    Return FileGetVersion(@ScriptFullPath)
+00185  +-EndFunc   ;==>_GetMyVersion
+00186    
+00187    ; #FUNCTION# ====================================================================================================================
+00188    ; Name...........: _ProjectInfoArrayInit
+00189    ; Description ...: Initializes an instance of the project info array structure.
+00190    ; Syntax.........: _ProjectInfoArrayInit()
+00191    ; Parameters ....: None.
+00192    ; Return values .: An instance of the project info array structure.
+00193    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00194    ; Modified.......:
+00195    ; Remarks .......: This should not be called until *after* the GUI has been initialized.
+00196    ; Related .......:
+00197    ; Link ..........;
+00198    ; Example .......;
+00199    ; ===============================================================================================================================
+00200  +-Func _ProjectInfoArrayInit()
+00201  |    Local $aProjectInfo[10]
+00202  |    $aProjectInfo[0] = 9
+00203  |    $aProjectInfo[1] = ""
+00204  |    $aProjectInfo[2] = GUICtrlRead($InputAuthor)
+00205  |    $aProjectInfo[3] = ""
+00206  |    $aProjectInfo[4] = GUICtrlRead($InputProjName)
+00207  |    $aProjectInfo[5] = ""
+00208  |    $aProjectInfo[6] = ""
+00209  |    $aProjectInfo[7] = ""
+00210  |    $aProjectInfo[8] = ""
+00211  |    $aProjectInfo[9] = GUICtrlRead($EditDescription)
+00212  |    Return $aProjectInfo
+00213  +-EndFunc   ;==>_ProjectInfoArrayInit
+00214    
+00215    ; #FUNCTION# ====================================================================================================================
+00216    ; Name...........: _GetReferences
+00217    ; Description ...: Gets an array of references (includes) from the $ListViewTargetLibs listview control.
+00218    ; Syntax.........: _GetReferences()
+00219    ; Parameters ....: None.
+00220    ; Return values .: An array of references (includes) with total count being stored at element zero.
+00221    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00222    ; Modified.......:
+00223    ; Remarks .......: This should not be called until *after* the GUI has been initialized.
+00224    ; Related .......:
+00225    ; Link ..........;
+00226    ; Example .......;
+00227    ; ===============================================================================================================================
+00228  +-Func _GetReferences()
+00229  |    Local $nRefCount = 0
+00230  |    Local $aReferences = 0
+00231  |    Local $hTargHandle = GUICtrlGetHandle($ListViewTargetLibs)
+00232  |    Local $nTotalReferences = _GUICtrlListView_GetItemCount($hTargHandle)
+00233  |  +-If ($nTotalReferences > 0) Then
+00234  |  |    Dim $aReferences[1]
+00235  |  |    $aReferences[0] = 0
+00236  |  |  +-For $nRefCount = 1 To $nTotalReferences
+00237  |  |  |    $aReferences[0] += 1
+00238  |  |  |    ReDim $aReferences[$nRefCount + 1]
+00239  |  |  |    $aReferences[$nRefCount] = _GUICtrlListView_GetItemText($hTargHandle, $nRefCount - 1)
+00240  |  |  +-Next
+00241  |  +-EndIf
+00242  |    $hTargHandle = 0
+00243  |    Return $aReferences
+00244  +-EndFunc   ;==>_GetReferences
+00245    
+00246    ; #FUNCTION# ====================================================================================================================
+00247    ; Name...........: _CreateApplicationConfig
+00248    ; Description ...: Generates an application configuration file.
+00249    ; Syntax.........: _CreateApplicationConfig($sConfigPath, $aProjectInfo)
+00250    ; Parameters ....: $sConfigPath  - The full path to the configuration file to create.
+00251    ;                  $aProjectInfo - An array containing project info. See _WriteApplicationScript for definition.
+00252    ; Return values .: None. On error, sets @error to one of the following:
+00253    ;                  |1 - $aProjectInfo is not a valid project info array structure.
+00254    ;                  |2 - $sConfigPath is not a valid config file path or is a file that already exists.
+00255    ;                  |3 - The config file could not be created or opened for writing.
+00256    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00257    ; Modified.......: 1/26/2011
+00258    ; Remarks .......: If $sConfigPath already exists, it will not be overwritten or modified.
+00259    ; Related .......:
+00260    ; Link ..........;
+00261    ; Example .......;
+00262    ; ===============================================================================================================================
+00263  +-Func _CreateApplicationConfig($sConfigPath, $aProjectInfo)
+00264  |  +-If ((Not IsArray($aProjectInfo)) Or ($aProjectInfo[0] <> 9)) Then
+00265  |  |    Return SetError(1)
+00266  |  +-EndIf
+00267  |    
+00268  |  +-If ((IsString($sConfigPath)) And (StringLen($sConfigPath) > 0) And (Not FileExists($sConfigPath))) Then
+00269  |  |    Local $hFile = FileOpen($sConfigPath, 2)
+00270  |  |  +-If ($hFile == -1) Then
+00271  |  |  |    Return SetError(3)
+00272  |  |  +-EndIf
+00273  |  |    
+00274  |  |    FileWriteLine($hFile, "; *** This file was generated by a tool. " & $MY_NAME & " v" & _GetMyVersion() & ".")
+00275  |  |    FileWriteLine($hFile, "; *** " & $aProjectInfo[4] & " configuration file.")
+00276  |  |    FileWriteLine($hFile, "; *** This file may be freely modified to suit your needs.")
+00277  |  |    FileWriteLine($hFile, "")
+00278  |  |    FileWriteLine($hFile, "")
+00279  |  |    FileWriteLine($hFile, "; *** Add sections and keys here as need. The following section was generated automatically.")
+00280  |  |    FileWriteLine($hFile, "[Main]")
+00281  |  |    FileFlush($hFile)
+00282  |  |    FileClose($hFile)
+00283  |  +-Else
+00284  |  |    SetError(2)
+00285  |  +-EndIf
+00286  |    Return
+00287  +-EndFunc   ;==>_CreateApplicationConfig
+00288    
+00289    ; #FUNCTION# ====================================================================================================================
+00290    ; Name...........: _MultiLineDescriptionToArray
+00291    ; Description ...: Breaks a multi-line description string into an array of strings. If the specified string does not contain
+00292    ;                  any carriage returns or line breaks, then an array with only one string element will be returned.
+00293    ; Syntax.........: _MultiLineDescriptionToArray($sDescription[, $isLib])
+00294    ; Parameters ....: $sDescription - The description text to convert to an array.
+00295    ;                  $isLib        - (Optional) Set True if the project script is a library (default is False).
+00296    ; Return values .: An array with the following structure:
+00297    ;                  $aDescLines[0] = N (element count)
+00298    ;                  $aDescLines[1] = Description line 1
+00299    ;                  $aDescLines[2] = Description line 2
+00300    ;                  ...
+00301    ;                  $aDescLines[3] = Description line N
+00302    ;
+00303    ;                  If $sDescription is a null or empty string, then $aDescLines will only contain element zero, which will be
+00304    ;                  set equal to zero ($aDescLines[0] = 0).
+00305    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00306    ; Modified.......:
+00307    ; Remarks .......:
+00308    ; Related .......:
+00309    ; Link ..........;
+00310    ; Example .......;
+00311    ; ===============================================================================================================================
+00312  +-Func _MultiLineDescriptionToArray($sDescription, $isLib = False)
+00313  |    ; Initialize the array to be returned.
+00314  |    Local $aDescLines[1]
+00315  |    $aDescLines[0] = 0
+00316  |    ; Is the description string null or empty?
+00317  |  +-If (StringLen($sDescription) > 0) Then
+00318  |  |    ; Does the description contain any carriage returns/line feeds?
+00319  |  |  +-If (StringInStr($sDescription, @CRLF) > 0) Then
+00320  |  |  |    ; Build an array of description lines, then sift through them, formatting as we go.
+00321  |  |  |    Local $sDescLine = ""
+00322  |  |  |    Local $nRefIdx = 0
+00323  |  |  |    Local $aLines = StringSplit($sDescription, @CRLF)
+00324  |  |  |  +-For $nRefIdx = 1 To $aLines[0]
+00325  |  |  |  |    $sDescLine = $aLines[$nRefIdx]
+00326  |  |  |  |  +-If (StringLen($sDescLine) > 0) Then
+00327  |  |  |  |  |    ; Fixup for the first line of the description.
+00328  |  |  |  |  |  +-If ($nRefIdx == 1) Then
+00329  |  |  |  |  |  |  +-If ($isLib) Then
+00330  |  |  |  |  |  |  |    $sDescLine = "; Description ...: " & $sDescLine
+00331  |  |  |  |  |  |  +-Else
+00332  |  |  |  |  |  |  |    $sDescLine = "Script Function : " & $sDescLine
+00333  |  |  |  |  |  |  +-EndIf
+00334  |  |  |  |  |  +-EndIf
+00335  |  |  |  |  |    
+00336  |  |  |  |  |    ; Fixup the line start.
+00337  |  |  |  |  |  +-If ($isLib) Then
+00338  |  |  |  |  |  |  +-If (StringRight($sDescLine, 1) <> ";") Then
+00339  |  |  |  |  |  |  |    $sDescLine = "; " & $sDescLine
+00340  |  |  |  |  |  |  +-EndIf
+00341  |  |  |  |  |  +-Else
+00342  |  |  |  |  |  |    $sDescLine = @TAB & $sDescLine
+00343  |  |  |  |  |  +-EndIf
+00344  |  |  |  |  |    ; Append the new line element.
+00345  |  |  |  |  |  +-If (_ArrayAdd($aDescLines, $sDescLine) <> -1) Then
+00346  |  |  |  |  |  |    $aDescLines[0] += 1
+00347  |  |  |  |  |  +-EndIf
+00348  |  |  |  |  +-EndIf
+00349  |  |  |  +-Next
+00350  |  |  +-Else
+00351  |  |  |    ; The description is just one line, so we simply set the element value.
+00352  |  |  |    ReDim $aDescLines[2]
+00353  |  |  |    $aDescLines[0] = 1
+00354  |  |  |  +-If ($isLib) Then
+00355  |  |  |  |    $aDescLines[1] = "; Description ...: " & $sDescription
+00356  |  |  |  +-Else
+00357  |  |  |  |    $aDescLines[1] = @TAB & "Script Function : " & $sDescription
+00358  |  |  |  +-EndIf
+00359  |  |  +-EndIf
+00360  |  +-EndIf
+00361  |    Return $aDescLines
+00362  +-EndFunc   ;==>_MultiLineDescriptionToArray
+00363    
+00364    ; #FUNCTION# ====================================================================================================================
+00365    ; Name...........: _WriteApplicationScript
+00366    ; Description ...: Generates an application script at the specified path using the specified project information.
+00367    ; Syntax.........: _WriteApplicationScript($hFileHandle, $aProjectInfo[, $aReferences[, $iHasGui[, $iRequireAdmin[, $sConfigName]]]])
+00368    ; Parameters ....: $hFileHandle   - The handle to the file we are going to write to. This should be a handle created by FileOpen().
+00369    ;                  $aProjectInfo  - An array containing project info in the following format:
+00370    ;                                   |$aProjectInfo[0] - Should always be 9. This is the count of elements (only used for validation).
+00371    ;                                   |$aProjectInfo[1] - The minimum version of AutoIt the script is compatible with (default is current).
+00372    ;                                   |$aProjectInfo[2] - The author's name.
+00373    ;                                   |$aProjectInfo[3] - The script (project) version (example: 1.0.0.5).
+00374    ;                                   |$aProjectInfo[4] - The name of the project (or script).
+00375    ;                                   |$aProjectInfo[5] - The date the project was created (defaults to current date) in YYYY/MM/DD format.
+00376    ;                                   |$aProjectInfo[6] - The date the project was modified (defaults to current date) in YYYY/MM/DD format.
+00377    ;                                   |$aProjectInfo[7] - The name of the company associated with the project.
+00378    ;                                   |$aProjectInfo[8] - The copyright information.
+00379    ;                                   |$aProjectInfo[9] - A synopsis of what the script (project) does. This is the description.
+00380    ;                  $aReferences   - Optional. An array of project references (includes) to be imported by the main script (using #include<>).
+00381    ;                                   This array should use the following format:
+00382    ;                                   |$aReferences[0] - The count of elements in the array (used for iteration, etc).
+00383    ;                                   |$aReferences[1] - Element1
+00384    ;                                   |$aReferences[2] - Element2
+00385    ;                                   |...
+00386    ;                                   |$aReferences[n] - ElementN
+00387    ;                  $iHasGui       - Optional. Indicates that the script has/will have a GUI (default is False).
+00388    ;                  $iRequireAdmin - Optional. Indicates that the script requires/will require administrative privileges (default is False).
+00389    ;                  $sConfigName   - Optional. The name of the configuration file associated with the application.
+00390    ; Return values .: None.
+00391    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00392    ; Modified.......: 02/14/2011
+00393    ; Remarks .......: This is meant to be called from _GenerateScript().
+00394    ; Related .......: _WriteLibScript, _GenerateScript
+00395    ; Link ..........;
+00396    ; Example .......;
+00397    ; ===============================================================================================================================
+00398  +-Func _WriteApplicationScript($hFileHandle, $aProjectInfo, $aReferences = 0, $iHasGui = False, $iRequireAdmin = False, $sConfigName = "")
+00399  |  +-If ($hFileHandle <> -1) Then
+00400  |  |    ; Write out the script header with the project info.
+00401  |  |  +-If ($iRequireAdmin) Then
+00402  |  |  |    FileWriteLine($hFileHandle, "#RequireAdmin")
+00403  |  |  +-EndIf
+00404  |  |    FileWriteLine($hFileHandle, 'Opt("MustDeclareVars", 1)')
+00405  |  |    FileWriteLine($hFileHandle, "#region ;**** Directives created by AutoIt3Wrapper_GUI ****")
+00406  |  |    ;*** CB_NOTE: Can't really put a multi-line description block here. Should probably just let the user do this using AutoIt3Wrapper.
+00407  |  |    ;FileWriteLine($hFileHandle, "#AutoIt3Wrapper_Res_Description=" & $aProjectInfo[9])
+00408  |  |    FileWriteLine($hFileHandle, "#AutoIt3Wrapper_Res_Fileversion=" & $aProjectInfo[3])
+00409  |  |    FileWriteLine($hFileHandle, "#AutoIt3Wrapper_Res_LegalCopyright=" & $aProjectInfo[8])
+00410  |  |    FileWriteLine($hFileHandle, "#endregion ;**** Directives created by AutoIt3Wrapper_GUI ****")
+00411  |  |    FileWriteLine($hFileHandle, "")
+00412  |  |    FileWriteLine($hFileHandle, "#cs ----------------------------------------------------------------------------")
+00413  |  |    FileWriteLine($hFileHandle, "")
+00414  |  |    FileWriteLine($hFileHandle, @TAB & "AutoIt Version .: " & $aProjectInfo[1])
+00415  |  |    FileWriteLine($hFileHandle, @TAB & "Author .........: " & $aProjectInfo[2])
+00416  |  |    FileWriteLine($hFileHandle, @TAB & "Script Version .: " & $aProjectInfo[3])
+00417  |  |    FileWriteLine($hFileHandle, @TAB & "Name ...........: " & $aProjectInfo[4])
+00418  |  |    FileWriteLine($hFileHandle, @TAB & "Date ...........: " & $aProjectInfo[5])
+00419  |  |    FileWriteLine($hFileHandle, @TAB & "Modified .......: " & $aProjectInfo[6])
+00420  |  |    FileWriteLine($hFileHandle, @TAB & "Company ........: " & $aProjectInfo[7])
+00421  |  |    FileWriteLine($hFileHandle, @TAB & "Copyright ......: " & $aProjectInfo[8])
+00422  |  |    
+00423  |  |    ; Print one or more description lines in the header comments.
+00424  |  |    Local $i = 0
+00425  |  |    Local $aDescLines = _MultiLineDescriptionToArray($aProjectInfo[9], False)
+00426  |  |  +-For $i = 1 To $aDescLines[0]
+00427  |  |  |    FileWriteLine($hFileHandle, $aDescLines[$i])
+00428  |  |  +-Next
+00429  |  |    
+00430  |  |    FileWriteLine($hFileHandle, "")
+00431  |  |    FileWriteLine($hFileHandle, "#ce ----------------------------------------------------------------------------")
+00432  |  |    FileWriteLine($hFileHandle, "")
+00433  |  |    FileWriteLine($hFileHandle, "#region Includes")
+00434  |  |    
+00435  |  |    ; If an array of references (includes) was provided, go ahead and fill them in here.
+00436  |  |  +-If ((IsArray($aReferences)) And ($aReferences[0] > 0)) Then
+00437  |  |  |    Local $sLibStr = ""
+00438  |  |  |  +-For $i = 1 To $aReferences[0]
+00439  |  |  |  |    $sLibStr = $aReferences[$i]
+00440  |  |  |  |    FileWriteLine($hFileHandle, '#include <' & $sLibStr & '>')
+00441  |  |  |  +-Next
+00442  |  |  +-Else
+00443  |  |  |    FileWriteLine($hFileHandle, "")
+00444  |  |  +-EndIf
+00445  |  |    
+00446  |  |    FileWriteLine($hFileHandle, "#endregion")
+00447  |  |    FileWriteLine($hFileHandle, "")
+00448  |  |    FileWriteLine($hFileHandle, "#region Script Constants")
+00449  |  |    FileWriteLine($hFileHandle, 'Global Const $MY_NAME = "' & $aProjectInfo[4] & '"')
+00450  |  |    FileWriteLine($hFileHandle, 'Global Const $HOME = @ScriptDir & "\"')
+00451  |  |  +-If (StringLen($sConfigName) > 0) Then
+00452  |  |  |    FileWriteLine($hFileHandle, 'Global Const $CONFIG = $HOME & "' & $sConfigName & '"')
+00453  |  |  +-EndIf
+00454  |  |    FileWriteLine($hFileHandle, "#endregion")
+00455  |  |    FileWriteLine($hFileHandle, "")
+00456  |  |    FileWriteLine($hFileHandle, "#region Script Globals")
+00457  |  |    FileWriteLine($hFileHandle, "")
+00458  |  |    FileWriteLine($hFileHandle, "#endregion")
+00459  |  |    FileWriteLine($hFileHandle, "")
+00460  |  |    FileWriteLine($hFileHandle, "#region Utility Functions")
+00461  |  |    FileWriteLine($hFileHandle, "")
+00462  |  |    FileWriteLine($hFileHandle, "#endregion")
+00463  |  |    FileWriteLine($hFileHandle, "")
+00464  |  |    
+00465  |  |    ; If this script is going to have a GUI then write a region for event handlers here.
+00466  |  |  +-If ($iHasGui) Then
+00467  |  |  |    FileWriteLine($hFileHandle, "#region Event Handlers")
+00468  |  |  |    FileWriteLine($hFileHandle, "")
+00469  |  |  |    FileWriteLine($hFileHandle, "#endregion")
+00470  |  |  |    FileWriteLine($hFileHandle, "")
+00471  |  |  +-EndIf
+00472  |  |    
+00473  |  |    FileWriteLine($hFileHandle, "#region Main Script")
+00474  |  |    FileWriteLine($hFileHandle, "; *********************** MAIN ENTRY POINT ****************************")
+00475  |  |    FileWriteLine($hFileHandle, "")
+00476  |  |    FileWriteLine($hFileHandle, "Exit")
+00477  |  |    FileWriteLine($hFileHandle, "#endregion")
+00478  |  +-EndIf
+00479  |    Return
+00480  +-EndFunc   ;==>_WriteApplicationScript
+00481    
+00482    ; #FUNCTION# ====================================================================================================================
+00483    ; Name...........: _WriteLibScript
+00484    ; Description ...: Generates a library (include) script at the specified path with the specified project information.
+00485    ; Syntax.........: _WriteLibScript($hFileHandle, $aProjectInfo[, $aReferences])
+00486    ; Parameters ....: $hFileHandle   - The handle to the file we are going to write to. This should be a handle created by FileOpen().
+00487    ;                  $aProjectInfo  - An array containing project info. See _WriteApplicationScript() for definition.
+00488    ;                  $aReferences   - Optional. An array of project references (includes) to be imported by the main script (using #include<>).
+00489    ;                                   See _WriteApplicationScript() for definition.
+00490    ; Return values .: None.
+00491    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00492    ; Modified.......: 02/14/2011
+00493    ; Remarks .......: This is meant to be called from _GenerateScript().
+00494    ; Related .......: _WriteApplicationScript, _GenerateScript
+00495    ; Link ..........;
+00496    ; Example .......;
+00497    ; ===============================================================================================================================
+00498  +-Func _WriteLibScript($hFileHandle, $aProjectInfo, $aReferences = 0)
+00499  |  +-If ($hFileHandle <> -1) Then
+00500  |  |    FileWriteLine($hFileHandle, "#include-once")
+00501  |  |    FileWriteLine($hFileHandle, "")
+00502  |  |    
+00503  |  |    ; Write the library info header.
+00504  |  |    FileWriteLine($hFileHandle, "; #INDEX# =======================================================================================================================")
+00505  |  |    FileWriteLine($hFileHandle, "; Title .........: " & $aProjectInfo[4])
+00506  |  |    
+00507  |  |    ; Print one or more description lines in the header comments.
+00508  |  |    Local $i = 0
+00509  |  |    Local $aDescLines = _MultiLineDescriptionToArray($aProjectInfo[9], True)
+00510  |  |  +-For $i = 1 To $aDescLines[0]
+00511  |  |  |    FileWriteLine($hFileHandle, $aDescLines[$i])
+00512  |  |  +-Next
+00513  |  |    
+00514  |  |    FileWriteLine($hFileHandle, "; Author(s) .....: " & $aProjectInfo[2])
+00515  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00516  |  |    FileWriteLine($hFileHandle, "")
+00517  |  |    
+00518  |  |    ; If an array of references (includes) was provided, go ahead and fill them in here.
+00519  |  |  +-If ((IsArray($aReferences)) And ($aReferences[0] > 0)) Then
+00520  |  |  |    FileWriteLine($hFileHandle, "#region Includes")
+00521  |  |  |    Local $idx = 0
+00522  |  |  |  +-For $idx = 1 To $aReferences[0]
+00523  |  |  |  |    FileWriteLine($hFileHandle, "#include <" & $aReferences[$idx] & ">")
+00524  |  |  |  +-Next
+00525  |  |  |    FileWriteLine($hFileHandle, "#endregion")
+00526  |  |  |    FileWriteLine($hFileHandle, "")
+00527  |  |  +-EndIf
+00528  |  |    
+00529  |  |    ; Write the variables section.
+00530  |  |    FileWriteLine($hFileHandle, "; #VARIABLES# ===================================================================================================================")
+00531  |  |    FileWriteLine($hFileHandle, "")
+00532  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00533  |  |    FileWriteLine($hFileHandle, "")
+00534  |  |    
+00535  |  |    ; Write the constants section.
+00536  |  |    FileWriteLine($hFileHandle, "; #CONSTANTS# ===================================================================================================================")
+00537  |  |    FileWriteLine($hFileHandle, "")
+00538  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00539  |  |    FileWriteLine($hFileHandle, "")
+00540  |  |    
+00541  |  |    ; Write the no-doc functions section.
+00542  |  |    FileWriteLine($hFileHandle, "; #NO_DOC_FUNCTION# =============================================================================================================")
+00543  |  |    FileWriteLine($hFileHandle, ";")
+00544  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00545  |  |    FileWriteLine($hFileHandle, "")
+00546  |  |    
+00547  |  |    ; Write the current list of functions section.
+00548  |  |    FileWriteLine($hFileHandle, "; #CURRENT# =====================================================================================================================")
+00549  |  |    FileWriteLine($hFileHandle, ";")
+00550  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00551  |  |    FileWriteLine($hFileHandle, "")
+00552  |  |    
+00553  |  |    ; Write the internal-use-only functions section.
+00554  |  |    FileWriteLine($hFileHandle, "; #INTERNAL_USE_ONLY# ===========================================================================================================")
+00555  |  |    FileWriteLine($hFileHandle, ";")
+00556  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00557  |  |    FileWriteLine($hFileHandle, "")
+00558  |  |    
+00559  |  |    ; Write out a template function with info header.
+00560  |  |    FileWriteLine($hFileHandle, "; #FUNCTION# ====================================================================================================================")
+00561  |  |    FileWriteLine($hFileHandle, "; Name...........: _FuncName")
+00562  |  |    FileWriteLine($hFileHandle, "; Description ...: A template function. This is a placeholder for a real function and is just here to demonstrate the format")
+00563  |  |    FileWriteLine($hFileHandle, ";                  of the function description header and proper function naming syntax.")
+00564  |  |    FileWriteLine($hFileHandle, "; Syntax.........: _FuncName()")
+00565  |  |    FileWriteLine($hFileHandle, "; Parameters ....: None.")
+00566  |  |    FileWriteLine($hFileHandle, "; Return values .: None.")
+00567  |  |    FileWriteLine($hFileHandle, "; Author ........: " & $aProjectInfo[2])
+00568  |  |    FileWriteLine($hFileHandle, "; Modified.......: ")
+00569  |  |    FileWriteLine($hFileHandle, "; Remarks .......: ")
+00570  |  |    FileWriteLine($hFileHandle, "; Related .......: ")
+00571  |  |    FileWriteLine($hFileHandle, "; Link ..........: ")
+00572  |  |    FileWriteLine($hFileHandle, "; Example .......: ")
+00573  |  |    FileWriteLine($hFileHandle, "; ===============================================================================================================================")
+00574  |  |    FileWriteLine($hFileHandle, "Func _FuncName()")
+00575  |  |    FileWriteLine($hFileHandle, @TAB & "Return")
+00576  |  |    FileWriteLine($hFileHandle, "EndFunc   ;==>_FuncName")
+00577  |  |    FileWriteLine($hFileHandle, "")
+00578  |  +-EndIf
+00579  |    Return
+00580  +-EndFunc   ;==>_WriteLibScript
+00581    
+00582    ; #FUNCTION# ====================================================================================================================
+00583    ; Name...........: _ModifyScript
+00584    ; Description ...: Modifies the project info in the specified script to match the specified parameters.
+00585    ; Syntax.........: _ModifyScript($sScriptPath, $aProjectInfo[, $aReferences[, $iHasGui[, $iRequireAdmin[, $isLib[, $sConfigName]]]]])
+00586    ; Parameters ....: $scriptPath    - The full path include filename where the script is to be generated.
+00587    ;                  $aProjectInfo  - An array containing project info. See _WriteApplicationScript() for definition.  Any existing
+00588    ;                                   project info will be replaced by the info in this array.
+00589    ;                  $aReferences   - Optional. An array of project references (includes) to be imported by the main script (using #include<>).
+00590    ;                                   See _WriteApplicationScript() for definition.  Specified includes will only be added if they
+00591    ;                                   do not already exist in the script. If the specified array is null or empty, it will simply
+00592    ;                                   be ignored and any existing includes will be left untouched.
+00593    ;                  $iHasGui       - Optional. Indicates that the script has/will have a GUI (default is False). Ignored if $isLib = True.
+00594    ;                                   If set True, an "Event Handlers" region will be added to the script (if it does not already exist).
+00595    ;                                   If set False, and an "Event Handlers" region and any code defined within that region will be removed.
+00596    ;                  $iRequireAdmin - Optional. Indicates that the script requires/will require administrative privileges (default is False).
+00597    ;                                   This parameter is ignored if $isLib = True.  If $iRequireAdmin is True, then the "#RequireAdmin"
+00598    ;                                   directive will be inserted at the beginning of the script if it does not already exist. If the
+00599    ;                                   $iRequireAdmin parameter is False and the "#RequireAdmin" directive exists, then it will be
+00600    ;                                   removed from the script.
+00601    ;                  $isLib         - Optional. Set True if the script being generated is a library (include). If True, then
+00602    ;                                   the $iHasGui, $iRequireAdmin, and $sConfigName parameters will be ignored.
+00603    ;                  $sConfigName   - Optional. The name of the config file associated with the application script.
+00604    ; Return values .: None.
+00605    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00606    ; Modified.......: 02/14/2011
+00607    ; Remarks .......: This is meant to be called from _GenerateScript(). It is basically one big array manipulation routine, as it
+00608    ;                  just loads the existing script file into an array structure which is then manipulated in memory before being
+00609    ;                  written to disk.
+00610    ; Related .......: _GenerateScript, _WriteLibScript, _WriteApplicationScript
+00611    ; Link ..........;
+00612    ; Example .......;
+00613    ; ===============================================================================================================================
+00614  +-Func _ModifyScript($sScriptPath, $aProjectInfo, $aReferences = 0, $iHasGui = False, $iRequireAdmin = False, $isLib = False, $sConfigName = "")
+00615  |  +-If (FileExists($sScriptPath)) Then
+00616  |  |    Local $aLines
+00617  |  |    Local $nRefIdx = 0
+00618  |  |    Local $nInsertPosition = -1
+00619  |  |    Local $nHeaderStart = -1
+00620  |  |    Local $nEndIndex = -1
+00621  |  |    Local $nElementCount = 0
+00622  |  |    
+00623  |  |    ; Try to read each line of the script into an array.
+00624  |  |  +-If (_FileReadToArray($sScriptPath, $aLines)) Then
+00625  |  |  |    ; Handle the header first.
+00626  |  |  |  +-If ($isLib) Then
+00627  |  |  |  |    $nHeaderStart = _ArraySearch($aLines, "#INDEX#", 0, 0, 0, 1)
+00628  |  |  |  |    $aLines[$nHeaderStart + 1] = "; Title .........: " & $aProjectInfo[4]
+00629  |  |  |  |    $nInsertPosition = $nHeaderStart + 2
+00630  |  |  |  |    $nEndIndex = _ArraySearch($aLines, "; Author(s)", $nInsertPosition, 0, 0, 1) - 1
+00631  |  |  |  |    $aLines[$nEndIndex + 1] = "; Author(s) .....: " & $aProjectInfo[2]
+00632  |  |  |  +-Else
+00633  |  |  |  |    ; First we overwrite the header with current values.
+00634  |  |  |  |    $nHeaderStart = _ArraySearch($aLines, "#cs", 0, 0, 0, 1)
+00635  |  |  |  |    $aLines[$nHeaderStart + 2] = @TAB & "AutoIt Version .: " & $aProjectInfo[1]
+00636  |  |  |  |    $aLines[$nHeaderStart + 3] = @TAB & "Author .........: " & $aProjectInfo[2]
+00637  |  |  |  |    $aLines[$nHeaderStart + 4] = @TAB & "Script Version .: " & $aProjectInfo[3]
+00638  |  |  |  |    $aLines[$nHeaderStart + 5] = @TAB & "Name ...........: " & $aProjectInfo[4]
+00639  |  |  |  |    $aLines[$nHeaderStart + 6] = @TAB & "Date ...........: " & $aProjectInfo[5]
+00640  |  |  |  |    $aLines[$nHeaderStart + 7] = @TAB & "Modified .......: " & $aProjectInfo[6]
+00641  |  |  |  |    $aLines[$nHeaderStart + 8] = @TAB & "Company ........: " & $aProjectInfo[7]
+00642  |  |  |  |    $aLines[$nHeaderStart + 9] = @TAB & "Copyright ......: " & $aProjectInfo[8]
+00643  |  |  |  |    $nInsertPosition = $nHeaderStart + 10
+00644  |  |  |  |    $nEndIndex = _ArraySearch($aLines, "#ce", $nInsertPosition, 0, 0, 1)
+00645  |  |  |  +-EndIf
+00646  |  |  |    
+00647  |  |  |    ; Here we handle the description text regardless of whether this is an application script or library script.
+00648  |  |  |    ; We have to start 2 positions back if this is an application.
+00649  |  |  |  +-If (Not $isLib) Then
+00650  |  |  |  |    $nEndIndex -= 2
+00651  |  |  |  +-EndIf
+00652  |  |  |    
+00653  |  |  |    ; Get the project description text
+00654  |  |  |    Local $aDescLines = _MultiLineDescriptionToArray($aProjectInfo[9], $isLib)
+00655  |  |  |  +-If ($aDescLines[0] > 0) Then
+00656  |  |  |  |  +-If ($aDescLines[0] > 1) Then
+00657  |  |  |  |  |    ; Since there are multiple description lines and each line is an element in $aLines,
+00658  |  |  |  |  |    ; we have to first delete the entire description section from the header, then split
+00659  |  |  |  |  |    ; the new description into an array, which we will then format and then insert the contents
+00660  |  |  |  |  |    ; of it into the $aLines array starting at the index of the description start in $aLines.
+00661  |  |  |  |  |  +-If ($nInsertPosition <> -1) Then
+00662  |  |  |  |  |  |    ; Count all the elements to delete.
+00663  |  |  |  |  |  |  +-For $nRefIdx = $nInsertPosition To $nEndIndex
+00664  |  |  |  |  |  |  |    $nElementCount += 1
+00665  |  |  |  |  |  |  +-Next
+00666  |  |  |  |  |  |    
+00667  |  |  |  |  |  |    ; Delete all the description elements.
+00668  |  |  |  |  |  |  +-For $nRefCount = 1 To $nElementCount
+00669  |  |  |  |  |  |  |  +-If (_ArrayDelete($aLines, $nInsertPosition) <> 0) Then
+00670  |  |  |  |  |  |  |  |    $aLines[0] -= 1
+00671  |  |  |  |  |  |  |  +-EndIf
+00672  |  |  |  |  |  |  +-Next
+00673  |  |  |  |  |  |    
+00674  |  |  |  |  |  |    ; Iterate through the description lines array and insert into the $aLines array.
+00675  |  |  |  |  |  |  +-For $nRefIdx = 1 To $aDescLines[0]
+00676  |  |  |  |  |  |  |    ; We have to advance the insertion positiion or the lines will be inserted in reverse order.
+00677  |  |  |  |  |  |  |  +-If ($nRefIdx > 1) Then
+00678  |  |  |  |  |  |  |  |    $nInsertPosition += 1
+00679  |  |  |  |  |  |  |  +-EndIf
+00680  |  |  |  |  |  |  |    
+00681  |  |  |  |  |  |  |    ; Insert the new line element.
+00682  |  |  |  |  |  |  |  +-If (_ArrayInsert($aLines, $nInsertPosition, $aDescLines[$nRefIdx]) <> 0) Then
+00683  |  |  |  |  |  |  |  |    $aLines[0] += 1
+00684  |  |  |  |  |  |  |  +-EndIf
+00685  |  |  |  |  |  |  +-Next
+00686  |  |  |  |  |  +-EndIf
+00687  |  |  |  |  +-Else
+00688  |  |  |  |  |    ; The description is just one line, so we simply set the element value.
+00689  |  |  |  |  |  +-If ($isLib) Then
+00690  |  |  |  |  |  |    $aLines[$nHeaderStart + 2] = $aDescLines[1]
+00691  |  |  |  |  |  +-Else
+00692  |  |  |  |  |  |    $aLines[$nHeaderStart + 10] = $aDescLines[1]
+00693  |  |  |  |  |  +-EndIf
+00694  |  |  |  |  +-EndIf
+00695  |  |  |  +-Else
+00696  |  |  |  |    ; No description provided.
+00697  |  |  |  |  +-If ($isLib) Then
+00698  |  |  |  |  |    $aLines[$nHeaderStart + 2] = "; Description ...: "
+00699  |  |  |  |  +-Else
+00700  |  |  |  |  |    $aLines[$nHeaderStart + 10] = @TAB & "Script Function : "
+00701  |  |  |  |  +-EndIf
+00702  |  |  |  +-EndIf
+00703  |  |  |    $aDescLines = 0
+00704  |  |  |    
+00705  |  |  |    ; Now we have to handle inserting/removing the "Event Handlers" region here.
+00706  |  |  |    ; First, make sure this isn't a library script, then look to see if the "Event Handlers"
+00707  |  |  |    ; region already exists.
+00708  |  |  |    $nInsertPosition = -1
+00709  |  |  |    Local $nRegionIndex = -1
+00710  |  |  |  +-If (Not $isLib) Then
+00711  |  |  |  |    $nRegionIndex = _ArraySearch($aLines, "#region Event Handlers", 0, 0, 0, 1)
+00712  |  |  |  |  +-If ($nRegionIndex == -1) Then
+00713  |  |  |  |  |  +-If ($iHasGui) Then
+00714  |  |  |  |  |  |    ; Build an array of regions (working backward) we'll use to insert after.
+00715  |  |  |  |  |  |    Local $aRegions[6] = [5, _
+00716  |  |  |  |  |  |  |       		"#region Utility Functions", _
+00717  |  |  |  |  |  |  |       		"#region Script Globals", _
+00718  |  |  |  |  |  |  |       		"#region Script Constants", _
+00719  |  |  |  |  |  |  |       		"#region Includes", _
+00720  |  |  |  |  |  |  |       		"#cs"]
+00721  |  |  |  |  |  |    
+00722  |  |  |  |  |  |    ; Iterate through the array, stopping after the first reqion we find.
+00723  |  |  |  |  |  |  +-For $nRefIdx = 1 To $aRegions[0]
+00724  |  |  |  |  |  |  |    $nRegionIndex = _ArraySearch($aLines, $aRegions[$nRefIdx], 0, 0, 0, 1)
+00725  |  |  |  |  |  |  |  +-If ($nRegionIndex <> -1) Then
+00726  |  |  |  |  |  |  |  |    $nInsertPosition = _ArraySearch($aLines, "#endregion", $nRegionIndex, $aLines[0], 0, 1) + 1
+00727  |  |  |  |  |  |  v--|----ExitLoop
+00728  |  |  |  |  |  |  |  +-EndIf
+00729  |  |  |  |  |  |  +-Next
+00730  |  |  |  |  |  |    
+00731  |  |  |  |  |  |    ; Now insert the "Event Handlers" region right after the last region we found.
+00732  |  |  |  |  |  |  +-If ($nInsertPosition <> -1) Then
+00733  |  |  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition, "")
+00734  |  |  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition + 1, "#region Event Handlers")
+00735  |  |  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition + 2, "")
+00736  |  |  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition + 3, "#endregion")
+00737  |  |  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition + 4, "")
+00738  |  |  |  |  |  |  |    $aLines[0] += 5
+00739  |  |  |  |  |  |  +-EndIf
+00740  |  |  |  |  |  |    $aRegions = 0
+00741  |  |  |  |  |  +-EndIf
+00742  |  |  |  |  +-Else
+00743  |  |  |  |  |    ; If the application script is not to have a GUI but a "Event Handler" region currently
+00744  |  |  |  |  |    ; exists, then we'll remove the entire region here.
+00745  |  |  |  |  |  +-If (Not $iHasGui) Then
+00746  |  |  |  |  |  |    $nElementCount = 0
+00747  |  |  |  |  |  |    $nRegionIndex -= 1
+00748  |  |  |  |  |  |    $nEndIndex = _ArraySearch($aLines, "#endregion", $nRegionIndex, 0, 0, 1) - 1
+00749  |  |  |  |  |  |  +-For $nRefIdx = $nRegionIndex To $nEndIndex
+00750  |  |  |  |  |  |  |    $nElementCount += 1
+00751  |  |  |  |  |  |  +-Next
+00752  |  |  |  |  |  |    
+00753  |  |  |  |  |  |  +-For $nRefCount = 1 To $nElementCount
+00754  |  |  |  |  |  |  |  +-If (_ArrayDelete($aLines, $nRegionIndex) <> 0) Then
+00755  |  |  |  |  |  |  |  |    $aLines[0] -= 1
+00756  |  |  |  |  |  |  |  +-EndIf
+00757  |  |  |  |  |  |  +-Next
+00758  |  |  |  |  |  +-EndIf
+00759  |  |  |  |  +-EndIf
+00760  |  |  |  |    
+00761  |  |  |  |    ; Check admin directive.
+00762  |  |  |  |    $nInsertPosition = -1
+00763  |  |  |  |    $nRegionIndex = _ArraySearch($aLines, "#RequireAdmin", 0, 0, 0, 1)
+00764  |  |  |  |  +-If ($nRegionIndex == -1) Then
+00765  |  |  |  |  |  +-If ($iRequireAdmin) Then
+00766  |  |  |  |  |  |    ; Directive not found. Insert at the beginning.
+00767  |  |  |  |  |  |  +-If (_ArrayInsert($aLines, 1, "#RequireAdmin") <> 0) Then
+00768  |  |  |  |  |  |  |    $aLines[0] += 1
+00769  |  |  |  |  |  |  +-EndIf
+00770  |  |  |  |  |  +-EndIf
+00771  |  |  |  |  +-Else
+00772  |  |  |  |  |  +-If (Not $iRequireAdmin) Then
+00773  |  |  |  |  |  |    ; We need to remove the directive if it exists.
+00774  |  |  |  |  |  |  +-If (_ArrayDelete($aLines, $nRegionIndex) <> 0) Then
+00775  |  |  |  |  |  |  |    $aLines[0] -= 1
+00776  |  |  |  |  |  |  +-EndIf
+00777  |  |  |  |  |  +-EndIf
+00778  |  |  |  |  +-EndIf
+00779  |  |  |  |    
+00780  |  |  |  |    ; Add/update config reference if specified.
+00781  |  |  |  |  +-If (StringLen($sConfigName) > 0) Then
+00782  |  |  |  |  |    Local $nGlobalConstIdx = _ArraySearch($aLines, "Global Const $CONFIG", 0, 0, 0, 1)
+00783  |  |  |  |  |  +-If ($nGlobalConstIdx <> -1) Then
+00784  |  |  |  |  |  |    $aLines[$nGlobalConstIdx] = 'Global Const $CONFIG = $HOME & "' & $sConfigName & '"'
+00785  |  |  |  |  |  +-EndIf
+00786  |  |  |  |  +-EndIf
+00787  |  |  |  +-EndIf
+00788  |  |  |    
+00789  |  |  |    ; Do we have any references to add?
+00790  |  |  |    Local $nIncludesRegionIndex = -1
+00791  |  |  |    Local $nStartPosition = -1
+00792  |  |  |    $nEndIndex = -1
+00793  |  |  |  +-If ((IsArray($aReferences)) And ($aReferences[0] > 0)) Then
+00794  |  |  |  |    ; We need to add references. Does an "Includes" region already exist?
+00795  |  |  |  |    $nIncludesRegionIndex = _ArraySearch($aLines, "#region Includes")
+00796  |  |  |  |  +-If ($nIncludesRegionIndex == -1) Then
+00797  |  |  |  |  |    ; No region. We need to insert one.
+00798  |  |  |  |  |  +-If ($isLib) Then
+00799  |  |  |  |  |  |    $nInsertPosition = _ArraySearch($aLines, "#INDEX#", 0, 0, 0, 1) + 7
+00800  |  |  |  |  |  +-Else
+00801  |  |  |  |  |  |    $nInsertPosition = _ArraySearch($aLines, "#ce", 0, 0, 0, 1) + 3
+00802  |  |  |  |  |  +-EndIf
+00803  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition, "#region Includes")
+00804  |  |  |  |  |    _ArrayInsert($aLines, $nInsertPosition + 1, "#endregion")
+00805  |  |  |  |  |    $aLines[0] += 2
+00806  |  |  |  |  |    $nStartPosition = $nInsertPosition + 1
+00807  |  |  |  |  +-Else
+00808  |  |  |  |  |    ; Blow away any inlcudes currently in the region, we will repopulate from scratch.
+00809  |  |  |  |  |    ; To do this, first we need to calculate the start and end positions (elements),
+00810  |  |  |  |  |    ; then calculate the total number of elements to be deleted.
+00811  |  |  |  |  |    $nElementCount = 0
+00812  |  |  |  |  |    $nStartPosition = $nIncludesRegionIndex + 1
+00813  |  |  |  |  |    $nEndIndex = _ArraySearch($aLines, "#endregion", $nStartPosition, 0, 0, 1) - 1
+00814  |  |  |  |  |  +-For $nRefCount = $nStartPosition To $nEndIndex
+00815  |  |  |  |  |  |    $nElementCount += 1
+00816  |  |  |  |  |  +-Next
+00817  |  |  |  |  |    
+00818  |  |  |  |  |    ; Delete all the existing elements.
+00819  |  |  |  |  |  +-For $nRefIdx = 1 To $nElementCount
+00820  |  |  |  |  |  |  +-If (_ArrayDelete($aLines, $nStartPosition) <> 0) Then
+00821  |  |  |  |  |  |  |    $aLines[0] -= 1
+00822  |  |  |  |  |  |  +-EndIf
+00823  |  |  |  |  |  +-Next
+00824  |  |  |  |  +-EndIf
+00825  |  |  |  |    
+00826  |  |  |  |    ; Insert all the current includes as new elements in the array,
+00827  |  |  |  |    ; starting at the first element between the start and end of the region.
+00828  |  |  |  |    ; We re-sort the array descending first, so that the elements actually
+00829  |  |  |  |    ; appear in *ascending* order once they are inserted in to the array.
+00830  |  |  |  |    Local $sLib = ""
+00831  |  |  |  |    Local $sProjPath = ""
+00832  |  |  |  |    _ArraySort($aReferences, 1, 1, $aReferences[0])
+00833  |  |  |  |  +-For $nRefIdx = 1 To $aReferences[0]
+00834  |  |  |  |  |    $sLib = $aReferences[$nRefIdx]
+00835  |  |  |  |  |    $sProjPath = _FileGetDirFromPath($projectFile)
+00836  |  |  |  |  |    ; If the library is located somewhere in the project directory, then build a relative path string.
+00837  |  |  |  |  |  +-If (StringInStr($sLib, $sProjPath) > 0) Then
+00838  |  |  |  |  |  |    $sLib = StringMid($sLib, StringLen($sProjPath) + 1)
+00839  |  |  |  |  |  +-EndIf
+00840  |  |  |  |  |    
+00841  |  |  |  |  |  +-If (_ArrayInsert($aLines, $nStartPosition, "#include <" & $sLib & ">") <> 0) Then
+00842  |  |  |  |  |  |    $aLines[0] += 1
+00843  |  |  |  |  |  +-EndIf
+00844  |  |  |  |  +-Next
+00845  |  |  |  +-EndIf
+00846  |  |  |    
+00847  |  |  |    ; We're going to replace the current file contents with the array contents.
+00848  |  |  |    Local $hFile = FileOpen($sScriptPath, 2)
+00849  |  |  |  +-If ($hFile <> -1) Then
+00850  |  |  |  |    _FileWriteFromArray($hFile, $aLines, 1)
+00851  |  |  |  |    FileFlush($hFile)
+00852  |  |  |  |    FileClose($hFile)
+00853  |  |  |  +-EndIf
+00854  |  |  +-EndIf
+00855  |  +-EndIf
+00856  |    Return
+00857  +-EndFunc   ;==>_ModifyScript
+00858    
+00859    ; #FUNCTION# ====================================================================================================================
+00860    ; Name...........: _GenerateScript
+00861    ; Description ...: Generates a script at the specified path using the specified project info.
+00862    ; Syntax.........: _GenerateScript($scriptPath, $aProjectInfo[, $aReferences[, $iHasGui[, $iRequireAdmin[, $isLib]]]])
+00863    ; Parameters ....: $scriptPath    - The full path include filename where the script is to be generated.
+00864    ;                  $aProjectInfo  - An array containing project info. See _WriteApplicationScript() for definition.
+00865    ;                  $aReferences   - Optional. An array of project references (includes) to be imported by the main script (using #include<>).
+00866    ;                                   See _WriteApplicationScript() for definition.
+00867    ;                  $iHasGui       - Optional. Indicates that the script has/will have a GUI (default is False). Ignored if $isLib = True.
+00868    ;                  $iRequireAdmin - Optional. Indicates that the script requires/will require administrative privileges (default is False).
+00869    ;                                   This parameter is ignored if $isLib = True.
+00870    ;                  $isLib         - Optional. Set True if the script being generated is a library (include).
+00871    ;                  $sConfigName   - Optional. The name of the config file to use with the application script. Ignored if $isLib = True.
+00872    ; Return values .: None. On error, sets @error to one of the following:
+00873    ;                  |1 - The provided script path is null, empty, or not a string.
+00874    ;                  |2 - The parent directory does not exist. Cannot create a script in a non-existent directory.
+00875    ;                  |3 - A valid project information array was not provided.
+00876    ;                  |4 - Unable to create the file or open in write mode.
+00877    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00878    ; Modified.......: 01/05/2011
+00879    ; Remarks .......:
+00880    ; Related .......: _WriteLibScript, _WriteApplicationScript, _ModifyScript
+00881    ; Link ..........;
+00882    ; Example .......;
+00883    ; ===============================================================================================================================
+00884  +-Func _GenerateScript($scriptPath, $aProjectInfo, $aReferences = 0, $iHasGui = False, $iRequireAdmin = False, $isLib = False, $sConfigName = "")
+00885  |    ; Do we have a valid path?
+00886  |  +-If ((Not IsString($scriptPath)) Or (StringLen($scriptPath) == 0)) Then
+00887  |  |    Return SetError(1)
+00888  |  +-EndIf
+00889  |    
+00890  |    ; Does the directory container of the script exist?
+00891  |  +-If (Not FileExists(_FileGetDirFromPath($scriptPath))) Then
+00892  |  |    Return SetError(2)
+00893  |  +-EndIf
+00894  |    
+00895  |    ; Make sure we have the proper file extension.
+00896  |  +-If (StringLower(_FileExtension($scriptPath)) <> "au3") Then
+00897  |  |    $scriptPath &= ".au3"
+00898  |  +-EndIf
+00899  |    
+00900  |    ; Were we given a proper project info array?
+00901  |  +-If ((Not IsArray($aProjectInfo)) Or ($aProjectInfo[0] <> 9)) Then
+00902  |  |    Return SetError(3)
+00903  |  +-EndIf
+00904  |    
+00905  |    ; If the script was loaded as part of an existing project, then we're just modifying existing data.
+00906  |    ; Otherwise, create a new script as part of the new project.
+00907  |  +-If ($iWasLoaded) Then
+00908  |  |    _ModifyScript($scriptPath, $aProjectInfo, $aReferences, $iHasGui, $iRequireAdmin, $isLib, $sConfigName)
+00909  |  +-Else
+00910  |  |    ; Open/create the file.
+00911  |  |    Local $hFile = FileOpen($scriptPath, 2)
+00912  |  |  +-If ($hFile == -1) Then
+00913  |  |  |    Return SetError(4)
+00914  |  |  +-EndIf
+00915  |  |    
+00916  |  |    ; If this is library, then generate a library script. Otherwise, generate an application script.
+00917  |  |  +-If ($isLib) Then
+00918  |  |  |    _WriteLibScript($hFile, $aProjectInfo, $aReferences)
+00919  |  |  +-Else
+00920  |  |  |    _WriteApplicationScript($hFile, $aProjectInfo, $aReferences, $iHasGui, $iRequireAdmin, $sConfigName)
+00921  |  |  +-EndIf
+00922  |  |    
+00923  |  |    ; Flush the buffers to disk and close the file.
+00924  |  |    FileFlush($hFile)
+00925  |  |    FileClose($hFile)
+00926  |  +-EndIf
+00927  |    Return
+00928  +-EndFunc   ;==>_GenerateScript
+00929    
+00930    ; #FUNCTION# ====================================================================================================================
+00931    ; Name...........: _GetAutoItPath
+00932    ; Description ...: Gets the path to the AutoItV3 installation on the local machine.
+00933    ; Syntax.........: _GetAutoItPath()
+00934    ; Parameters ....: None.
+00935    ; Return values .: Success - The path path to the AutoItV3 installation directory.
+00936    ;                  Failure - An empty string.
+00937    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00938    ; Modified.......: 12/28/2010
+00939    ; Remarks .......:
+00940    ; Related .......:
+00941    ; Link ..........;
+00942    ; Example .......;
+00943    ; ===============================================================================================================================
+00944  +-Func _GetAutoItPath()
+00945  |    Local $sAutoItPath = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\AutoIt v3\AutoIt", "InstallDir")
+00946  |  +-If ((@error) Or (StringLen($sAutoItPath) == 0)) Then
+00947  |  |    ; Couldn't get the path from the registry. Let's see if it exists in it's usual spot.
+00948  |  |    $sAutoItPath = @ProgramFilesDir & "\AutoIt3"
+00949  |  |  +-If (Not _FileIsDir($sAutoItPath)) Then
+00950  |  |  |    ; Still can't find it. Are we on a 64bit host?
+00951  |  |  |  +-If (@OSArch <> "x86") Then
+00952  |  |  |  |    $sAutoItPath = RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\AutoIt v3\AutoIt", "InstallDir")
+00953  |  |  |  |  +-If ((@error) Or (StringLen($sAutoItPath) == 0)) Then
+00954  |  |  |  |  |    ; WTF? Let's try this.... if we still don't find it, then assume it isn't there.
+00955  |  |  |  |  |    $sAutoItPath = EnvGet("programfiles(x86)") & "\AutoIt3"
+00956  |  |  |  |  +-EndIf
+00957  |  |  |  +-EndIf
+00958  |  |  +-EndIf
+00959  |  +-EndIf
+00960  |    ; Make sure the path exists and is a directory.
+00961  |  +-If (Not _FileIsDir($sAutoItPath)) Then
+00962  |  |    $sAutoItPath = ""
+00963  |  +-EndIf
+00964  |    Return $sAutoItPath
+00965  +-EndFunc   ;==>_GetAutoItPath
+00966    
+00967    ; #FUNCTION# ====================================================================================================================
+00968    ; Name...........: _GetAutoItIncludesDir
+00969    ; Description ...: Gets the full path to the AutoItV3 Includes directory where all the AutoIt standard libraries are stored.
+00970    ; Syntax.........: _GetAutoItIncludesDir()
+00971    ; Parameters ....: None.
+00972    ; Return values .: Success - The full path to the AutoItV3 Includes directory.
+00973    ;                  Failure - An empty string.
+00974    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+00975    ; Modified.......:
+00976    ; Remarks .......:
+00977    ; Related .......: _GetAutoItPath
+00978    ; Link ..........;
+00979    ; Example .......;
+00980    ; ===============================================================================================================================
+00981  +-Func _GetAutoItIncludesDir()
+00982  |    ; First get the path to the AutoIt installation directory.
+00983  |    Local $sIncludesPath = ""
+00984  |    Local $sAutoItPath = _GetAutoItPath()
+00985  |  +-If (StringLen($sAutoItPath) > 0) Then
+00986  |  |    ; AutoIt exists. Build the path to the Includes folder and make sure it exists.
+00987  |  |    $sIncludesPath = $sAutoItPath & "\Include"
+00988  |  |  +-If (Not (_FileIsDir($sIncludesPath))) Then
+00989  |  |  |    $sIncludesPath = ""
+00990  |  |  +-EndIf
+00991  |  +-EndIf
+00992  |    Return $sIncludesPath
+00993  +-EndFunc   ;==>_GetAutoItIncludesDir
+00994    
+00995    ; #FUNCTION# ====================================================================================================================
+00996    ; Name...........: _GetSciteExec
+00997    ; Description ...: Gets the full path to the SciTE code editor for AutoItV3 executable.
+00998    ; Syntax.........: _GetSciteExec()
+00999    ; Parameters ....: None.
+01000    ; Return values .: Success - The full path to the SciTE executable.
+01001    ;                  Failure - An empty string.
+01002    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01003    ; Modified.......:
+01004    ; Remarks .......:
+01005    ; Related .......: _GetAutoItPath, _GetAutoItIncludesDir
+01006    ; Link ..........;
+01007    ; Example .......;
+01008    ; ===============================================================================================================================
+01009  +-Func _GetSciteExec()
+01010  |    ; First get the path to the AutoIt installation directory.
+01011  |    Local $sSciteExec = ""
+01012  |    Local $sAutoItPath = _GetAutoItPath()
+01013  |  +-If (StringLen($sAutoItPath) > 0) Then
+01014  |  |    ;AutoIt exists. Build the path to the executable and make sure it exists.
+01015  |  |    $sSciteExec = $sAutoItPath & "\SciTE\SciTE.exe"
+01016  |  |  +-If (Not FileExists($sSciteExec)) Then
+01017  |  |  |    $sSciteExec = ""
+01018  |  |  +-EndIf
+01019  |  +-EndIf
+01020  |    Return $sSciteExec
+01021  +-EndFunc   ;==>_GetSciteExec
+01022    
+01023    ; #FUNCTION# ====================================================================================================================
+01024    ; Name...........: _LoadGlobalConfig
+01025    ; Description ...: Loads the global application configuration from the main configuration file (if present).
+01026    ; Syntax.........: _LoadGlobalConfig()
+01027    ; Parameters ....: None.
+01028    ; Return values .: None. Loaded settings are immediately applied to the UI.
+01029    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01030    ; Modified.......:
+01031    ; Remarks .......:
+01032    ; Related .......: _SaveGlobalConfig
+01033    ; Link ..........;
+01034    ; Example .......;
+01035    ; ===============================================================================================================================
+01036  +-Func _LoadGlobalConfig()
+01037  |  +-If (FileExists($CONFIG)) Then
+01038  |  |    Local $sBaseDir = IniRead($CONFIG, "Main", "ProjectsDir", "")
+01039  |  |  +-If (_FileIsDir($sBaseDir)) Then
+01040  |  |  |    GUICtrlSetData($InputLocation, $sBaseDir)
+01041  |  |  |  +-If (StringLower(StringStripWS(IniRead($CONFIG, "Main", "ProjectsDirIsDefault", ""), 8)) == "true") Then
+01042  |  |  |  |    GUICtrlSetState($CheckboxMakeDefault, $GUI_CHECKED)
+01043  |  |  |  |    GUICtrlSetState($InputLocation, $GUI_DISABLE)
+01044  |  |  |  |    GUICtrlSetState($ButtonProjectBrowse, $GUI_DISABLE)
+01045  |  |  |  +-EndIf
+01046  |  |  +-EndIf
+01047  |  +-EndIf
+01048  |    Return
+01049  +-EndFunc   ;==>_LoadGlobalConfig
+01050    
+01051    ; #FUNCTION# ====================================================================================================================
+01052    ; Name...........: _SaveGlobalConfig
+01053    ; Description ...: Saves the global configuration. If the config file does not exist, it will be created.
+01054    ; Syntax.........: _SaveGlobalConfig()
+01055    ; Parameters ....: None.
+01056    ; Return values .: None. The options are immediately written to the config file.
+01057    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01058    ; Modified.......:
+01059    ; Remarks .......:
+01060    ; Related .......: _LoadGlobalConfig
+01061    ; Link ..........;
+01062    ; Example .......;
+01063    ; ===============================================================================================================================
+01064  +-Func _SaveGlobalConfig()
+01065  |    Local $sProjectsDir = GUICtrlRead($InputLocation)
+01066  |  +-If (_FileIsDir($sProjectsDir)) Then
+01067  |  |    IniWrite($CONFIG, "Main", "ProjectsDir", $sProjectsDir)
+01068  |  |  +-If (GUICtrlRead($CheckboxMakeDefault) == $GUI_CHECKED) Then
+01069  |  |  |    IniWrite($CONFIG, "Main", "ProjectsDirIsDefault", "True")
+01070  |  |  +-Else
+01071  |  |  |    IniWrite($CONFIG, "Main", "ProjectsDirIsDefault", "False")
+01072  |  |  +-EndIf
+01073  |  +-EndIf
+01074  |    Return
+01075  +-EndFunc   ;==>_SaveGlobalConfig
+01076    
+01077    ; #FUNCTION# ====================================================================================================================
+01078    ; Name...........: _DisplayAutoItStandardLibs
+01079    ; Description ...: Enumerates and displays all the all the standard includes that were installed with AutoItV3 in the "AutoItV3
+01080    ;                  Standard Includes" listview control.
+01081    ; Syntax.........: _DisplayAutoItStandardLibs()
+01082    ; Parameters ....: None.
+01083    ; Return values .: None.
+01084    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01085    ; Modified.......:
+01086    ; Remarks .......:
+01087    ; Related .......:
+01088    ; Link ..........;
+01089    ; Example .......;
+01090    ; ===============================================================================================================================
+01091  +-Func _DisplayAutoItStandardLibs()
+01092  |    ; First get the Includes directory and make sure it exists.
+01093  |    Local $sLibsDir = _GetAutoItIncludesDir()
+01094  |  +-If (_FileIsDir($sLibsDir)) Then
+01095  |  |    ; Get a handle for the source listview control.
+01096  |  |    Local $hSrcHandle = GUICtrlGetHandle($ListViewSourceLibs)
+01097  |  |  +-If (IsHWnd($hSrcHandle)) Then
+01098  |  |  |    ; Block repainting of the listview and clear its contents.
+01099  |  |  |    _GUICtrlListView_BeginUpdate($hSrcHandle)
+01100  |  |  |    _GUICtrlListView_DeleteAllItems($hSrcHandle)
+01101  |  |  |    ; Enumerate the libraries in the Includes directory and add the filename of each one to the listview.
+01102  |  |  |    Local $idx = 0
+01103  |  |  |    Local $aLibs[1]
+01104  |  |  |    $aLibs[0] = 0
+01105  |  |  |    $aLibs = _FileRecurseBuildList($sLibsDir, $aLibs, "*.au3")
+01106  |  |  |  +-For $idx = 1 To $aLibs[0]
+01107  |  |  |  |    _GUICtrlListView_AddItem($hSrcHandle, _FileGetFileName($aLibs[$idx]))
+01108  |  |  |  +-Next
+01109  |  |  |    ; Repaint the listview.
+01110  |  |  |    _GUICtrlListView_EndUpdate($hSrcHandle)
+01111  |  |  +-EndIf
+01112  |  |    $hSrcHandle = 0
+01113  |  +-EndIf
+01114  |    Return
+01115  +-EndFunc   ;==>_DisplayAutoItStandardLibs
+01116    
+01117    ; #FUNCTION# ====================================================================================================================
+01118    ; Name...........: _ClearSourceLibs
+01119    ; Description ...: Clears the contents of the "AutoItV3 Standard Includes" listview control.
+01120    ; Syntax.........: _ClearSourceLibs()
+01121    ; Parameters ....: None.
+01122    ; Return values .: None.
+01123    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01124    ; Modified.......: 01/08/2011
+01125    ; Remarks .......:
+01126    ; Related .......: _ClearTargetLibs
+01127    ; Link ..........;
+01128    ; Example .......;
+01129    ; ===============================================================================================================================
+01130  +-Func _ClearSourceLibs()
+01131  |    Local $hSrcHandle = GUICtrlGetHandle($ListViewSourceLibs)
+01132  |  +-If (IsHWnd($hSrcHandle)) Then
+01133  |  |    _GUICtrlListView_BeginUpdate($hSrcHandle)
+01134  |  |    _GUICtrlListView_DeleteAllItems($hSrcHandle)
+01135  |  |    _GUICtrlListView_EndUpdate($hSrcHandle)
+01136  |  +-EndIf
+01137  |    $hSrcHandle = 0
+01138  |    Return
+01139  +-EndFunc   ;==>_ClearSourceLibs
+01140    
+01141    ; #FUNCTION# ====================================================================================================================
+01142    ; Name...........: _ClearTargetLibs
+01143    ; Description ...: Clears the contents of the "Project Includes" listview control.
+01144    ; Syntax.........: _ClearTargetLibs()
+01145    ; Parameters ....: None.
+01146    ; Return values .: None.
+01147    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01148    ; Modified.......: 01/08/2011
+01149    ; Remarks .......:
+01150    ; Related .......: _ClearSourceLibs
+01151    ; Link ..........;
+01152    ; Example .......;
+01153    ; ===============================================================================================================================
+01154  +-Func _ClearTargetLibs()
+01155  |    Local $hSrcHandle = GUICtrlGetHandle($ListViewTargetLibs)
+01156  |  +-If (IsHWnd($hSrcHandle)) Then
+01157  |  |    _GUICtrlListView_BeginUpdate($hSrcHandle)
+01158  |  |    _GUICtrlListView_DeleteAllItems($hSrcHandle)
+01159  |  |    _GUICtrlListView_EndUpdate($hSrcHandle)
+01160  |  +-EndIf
+01161  |    $hSrcHandle = 0
+01162  |    Return
+01163  +-EndFunc   ;==>_ClearTargetLibs
+01164    
+01165    ; #FUNCTION# ====================================================================================================================
+01166    ; Name...........: _ResetForm
+01167    ; Description ...: Resets all the form controls back to their default states and reloads the global configuration.
+01168    ; Syntax.........: _ResetForm()
+01169    ; Parameters ....: None.
+01170    ; Return values .: None.
+01171    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01172    ; Modified.......: 01/04/2011
+01173    ; Remarks .......:
+01174    ; Related .......:
+01175    ; Link ..........;
+01176    ; Example .......;
+01177    ; ===============================================================================================================================
+01178  +-Func _ResetForm()
+01179  |    GUICtrlSetState($RadioApp, $GUI_CHECKED)
+01180  |    GUICtrlSetData($InputProjName, "")
+01181  |    GUICtrlSetData($InputLocation, "")
+01182  |    GUICtrlSetState($InputLocation, $GUI_ENABLE)
+01183  |    GUICtrlSetState($CheckboxMakeDefault, $GUI_UNCHECKED)
+01184  |    GUICtrlSetData($InputFullPath, "")
+01185  |    GUICtrlSetData($InputMainScript, "")
+01186  |    _DisplayAutoItStandardLibs()
+01187  |    _ClearTargetLibs()
+01188  |    GUICtrlSetData($ListViewTargetLibs, "")
+01189  |    GUICtrlSetData($InputAutoItVer, @AutoItVersion)
+01190  |    GUICtrlSetData($InputAuthor, @UserName)
+01191  |    GUICtrlSetData($InputScriptVer, "1.0.0.0")
+01192  |    GUICtrlSetData($DateCreated, _NowCalcDate())
+01193  |    GUICtrlSetData($DateModified, _NowCalcDate())
+01194  |    GUICtrlSetData($InputCompany, "")
+01195  |    GUICtrlSetData($InputCopyright, "")
+01196  |    GUICtrlSetData($EditDescription, "")
+01197  |    GUICtrlSetState($CheckboxRequireAdmin, $GUI_UNCHECKED)
+01198  |    GUICtrlSetState($CheckboxHasGui, $GUI_ENABLE + $GUI_UNCHECKED)
+01199  |    GUICtrlSetState($CheckboxUseConfig, $GUI_UNCHECKED)
+01200  |    GUICtrlSetData($InputConfigName, "")
+01201  |    GUICtrlSetState($InputConfigName, $GUI_DISABLE)
+01202  |    _GUICtrlComboBox_SetCurSel($ComboCopyPolicy, 0)
+01203  |    _LoadGlobalConfig()
+01204  |    Return
+01205  +-EndFunc   ;==>_ResetForm
+01206    
+01207    ; #FUNCTION# ====================================================================================================================
+01208    ; Name...........: _LoadReferencesFromProject
+01209    ; Description ...: Loads all library references (includes) from the project file and load them into the target listview control.
+01210    ; Syntax.........: _LoadReferencesFromProject($sProjectFile)
+01211    ; Parameters ....: $sProjectFile - The full path to the project file to load the references from.
+01212    ; Return values .: None.
+01213    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01214    ; Modified.......: 02/08/2011
+01215    ; Remarks .......: This is meant to be called from _LoadProject().
+01216    ; Related .......: _LoadProject, _LoadDetailsFromProject
+01217    ; Link ..........;
+01218    ; Example .......;
+01219    ; ===============================================================================================================================
+01220  +-Func _LoadReferencesFromProject($sProjectFile)
+01221  |    ; Make sure the project file exists and read all the key-value pairs of the References section into an array.
+01222  |  +-If (FileExists($sProjectFile)) Then
+01223  |  |    Local $aLibs = IniReadSection($sProjectFile, "References")
+01224  |  |  +-If ((Not @error) And (IsArray($aLibs))) Then
+01225  |  |  |    Local $sLocalLib = ""
+01226  |  |  |    Local $x = 0
+01227  |  |  |    ; Get handles for the source and target listview controls and block repainting of both listviews until we're done.
+01228  |  |  |    Local $hSrcHandle = GUICtrlGetHandle($ListViewSourceLibs)
+01229  |  |  |    Local $hTargHandle = GUICtrlGetHandle($ListViewTargetLibs)
+01230  |  |  |    _GUICtrlListView_BeginUpdate($hSrcHandle)
+01231  |  |  |    _GUICtrlListView_BeginUpdate($hTargHandle)
+01232  |  |  |    ; Iterate through the array of Includes.
+01233  |  |  |  +-For $x = 1 To $aLibs[0][0]
+01234  |  |  |  |    ; Build the default parent directory.
+01235  |  |  |  |    $sLocalLib = $aLibs[$x][1]
+01236  |  |  |  |    Local $sParent = $HOME
+01237  |  |  |  |    Local $sTemp = ""
+01238  |  |  |  |  +-If ($InputFullPath <> 0) Then
+01239  |  |  |  |  |    $sTemp = GUICtrlRead($InputFullPath)
+01240  |  |  |  |  +-Else
+01241  |  |  |  |  |    $sTemp = _FileGetDirFromPath($sProjectFile)
+01242  |  |  |  |  +-EndIf
+01243  |  |  |  |    
+01244  |  |  |  |  +-If (StringLen($sTemp) > 0) Then
+01245  |  |  |  |  |    $sParent = $sTemp
+01246  |  |  |  |  +-EndIf
+01247  |  |  |  |    
+01248  |  |  |  |  +-If (StringRight($sParent, 1) <> "\") Then
+01249  |  |  |  |  |    $sParent &= "\"
+01250  |  |  |  |  +-EndIf
+01251  |  |  |  |    
+01252  |  |  |  |    ; Does the string contain a path delimiter?
+01253  |  |  |  |  +-If (StringInStr($sLocalLib, "\")) Then
+01254  |  |  |  |  |    ; Does the path include a drive letter?
+01255  |  |  |  |  |  +-If (StringInStr($sLocalLib, ":") == 0) Then
+01256  |  |  |  |  |  |    ; Assume the path is a child of the project directory.
+01257  |  |  |  |  |  |  +-If (StringLeft($sLocalLib, 1) == "\") Then
+01258  |  |  |  |  |  |  |    $sLocalLib = $sParent & StringRight($sLocalLib, StringLen($sLocalLib) - 1)
+01259  |  |  |  |  |  |  +-Else
+01260  |  |  |  |  |  |  |    $sLocalLib = $sParent & $sLocalLib
+01261  |  |  |  |  |  |  +-EndIf
+01262  |  |  |  |  |  +-EndIf
+01263  |  |  |  |  |    
+01264  |  |  |  |  |  +-If (Not FileExists($sLocalLib)) Then
+01265  |  |  |  |  |  |    ; CB_TODO: Consider giving the user the option to abort loading the project here.
+01266  |  |  |  |  |  |    MsgBox(16, $MY_NAME, "Unable to locate project reference: " & $aLibs[$x][1])
+01267  |  |  |  ^--|--|----ContinueLoop
+01268  |  |  |  |  |  +-EndIf
+01269  |  |  |  |  +-Else
+01270  |  |  |  |  |    ; Only a filename was provided. Is it in the directory we executed from?
+01271  |  |  |  |  |    $sLocalLib = $sParent & $sLocalLib
+01272  |  |  |  |  |  +-If (Not FileExists($sLocalLib)) Then
+01273  |  |  |  |  |  |    ; Nope. Wasn't in there. Is it in AutoIt's "Include" directory?
+01274  |  |  |  |  |  |    $sLocalLib = _GetAutoItIncludesDir() & "\" & $aLibs[$x][1]
+01275  |  |  |  |  |  |  +-If (Not FileExists($sLocalLib)) Then
+01276  |  |  |  |  |  |  |    ; CB_TODO: Consider giving the user the option to abort loading the project here.
+01277  |  |  |  |  |  |  |    MsgBox(16, $MY_NAME, "Unable to locate project reference: " & $aLibs[$x][1])
+01278  |  |  |  ^--|--|--|----ContinueLoop
+01279  |  |  |  |  |  |  +-EndIf
+01280  |  |  |  |  |  +-EndIf
+01281  |  |  |  |  |    $sLocalLib = $aLibs[$x][1]
+01282  |  |  |  |  +-EndIf
+01283  |  |  |  |    
+01284  |  |  |  |    ; Add it to the target references listview.
+01285  |  |  |  |    _GUICtrlListView_AddItem($hTargHandle, $sLocalLib)
+01286  |  |  |  |    ; See if it exists in the source references listview. If so, remove it from source.
+01287  |  |  |  |    Local $nLocatedIndex = _GUICtrlListView_FindText($hSrcHandle, $aLibs[$x][1], -1)
+01288  |  |  |  |  +-If ($nLocatedIndex <> -1) Then
+01289  |  |  |  |  |    _GUICtrlListView_DeleteItem($hSrcHandle, $nLocatedIndex)
+01290  |  |  |  |  +-EndIf
+01291  |  |  |  +-Next
+01292  |  |  |    ; Repaint both listviews and release the handles.
+01293  |  |  |    _GUICtrlListView_EndUpdate($hSrcHandle)
+01294  |  |  |    _GUICtrlListView_EndUpdate($hTargHandle)
+01295  |  |  |    $hSrcHandle = 0
+01296  |  |  |    $hTargHandle = 0
+01297  |  |  +-EndIf
+01298  |  +-EndIf
+01299  |    Return
+01300  +-EndFunc   ;==>_LoadReferencesFromProject
+01301    
+01302    ; #FUNCTION# ====================================================================================================================
+01303    ; Name...........: _LoadDetailsFromProject
+01304    ; Description ...: Loads the project details from the project file.
+01305    ; Syntax.........: _LoadDetailsFromProject($sProjectFile)
+01306    ; Parameters ....: $sProjectFile - The full path to the project file to load the references from.
+01307    ; Return values .: None.
+01308    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01309    ; Modified.......:
+01310    ; Remarks .......: This is meant to be called from _LoadProject().
+01311    ; Related .......: _LoadProject, _LoadReferencesFromProject
+01312    ; Link ..........;
+01313    ; Example .......;
+01314    ; ===============================================================================================================================
+01315  +-Func _LoadDetailsFromProject($sProjectFile)
+01316  |  +-If (FileExists($sProjectFile)) Then
+01317  |  |    Local $sAutoItVer = StringStripWS(IniRead($sProjectFile, "Details", "AutoItVer", @AutoItVersion), 8)
+01318  |  |    Local $sAuthor = IniRead($sProjectFile, "Details", "Author", "")
+01319  |  |    Local $sScriptVer = StringStripWS(IniRead($sProjectFile, "Details", "ScriptVer", "1.0.0.0"), 8)
+01320  |  |    Local $sDateCreated = StringStripWS(IniRead($sProjectFile, "Details", "Date", _NowCalcDate()), 8)
+01321  |  |    Local $sDateModified = StringStripWS(IniRead($sProjectFile, "Details", "Modified", _NowCalcDate()), 8)
+01322  |  |    Local $sCompany = IniRead($sProjectFile, "Details", "Company", "")
+01323  |  |    Local $sCopyright = IniRead($sProjectFile, "Details", "Copyright", "")
+01324  |  |    Local $sDescription = IniRead($sProjectFile, "Details", "Description", "")
+01325  |  |    Local $sRequireAdmin = StringStripWS(IniRead($sProjectFile, "Details", "RequireAdmin", "False"), 8)
+01326  |  |    Local $iRequireAdmin = False
+01327  |  |  +-If (StringLower($sRequireAdmin) == "true") Then
+01328  |  |  |    $iRequireAdmin = True
+01329  |  |  +-EndIf
+01330  |  |    
+01331  |  |  +-If (StringInStr($sDescription, "|") > 0) Then
+01332  |  |  |    $sDescription = StringReplace($sDescription, "|", @CRLF)
+01333  |  |  +-EndIf
+01334  |  |    
+01335  |  |    Local $sHasGui = StringStripWS(IniRead($sProjectFile, "Details", "HasGUI", "False"), 8)
+01336  |  |    Local $iHasGui = False
+01337  |  |  +-If (StringLower($sHasGui) == "true") Then
+01338  |  |  |    $iHasGui = True
+01339  |  |  +-EndIf
+01340  |  |    
+01341  |  |    ; CB_TODO: Probably need to do some validation here.
+01342  |  |    
+01343  |  |    GUICtrlSetData($InputAutoItVer, $sAutoItVer)
+01344  |  |    GUICtrlSetData($InputAuthor, $sAuthor)
+01345  |  |    GUICtrlSetData($InputScriptVer, $sScriptVer)
+01346  |  |    GUICtrlSetData($DateCreated, $sDateCreated)
+01347  |  |    GUICtrlSetData($DateModified, $sDateModified)
+01348  |  |    GUICtrlSetData($InputCompany, $sCompany)
+01349  |  |    GUICtrlSetData($InputCopyright, $sCopyright)
+01350  |  |    GUICtrlSetData($EditDescription, $sDescription)
+01351  |  |  +-If ($iRequireAdmin) Then
+01352  |  |  |    GUICtrlSetState($CheckboxRequireAdmin, $GUI_CHECKED)
+01353  |  |  +-Else
+01354  |  |  |    GUICtrlSetState($CheckboxRequireAdmin, $GUI_UNCHECKED)
+01355  |  |  +-EndIf
+01356  |  |    
+01357  |  |  +-If ($iHasGui) Then
+01358  |  |  |    GUICtrlSetState($CheckboxHasGui, $GUI_CHECKED)
+01359  |  |  +-Else
+01360  |  |  |    GUICtrlSetState($CheckboxHasGui, $GUI_UNCHECKED)
+01361  |  |  +-EndIf
+01362  |  +-EndIf
+01363  |    Return
+01364  +-EndFunc   ;==>_LoadDetailsFromProject
+01365    
+01366    ; #FUNCTION# ====================================================================================================================
+01367    ; Name...........: _LoadProject
+01368    ; Description ...: Loads all of the project settings from the specified project file.
+01369    ; Syntax.........: _LoadProject($sProjectFile)
+01370    ; Parameters ....: $sProjectFile - The full path to the project file to load the references from.
+01371    ; Return values .: Success - True.
+01372    ;                  Failure - False.
+01373    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01374    ; Modified.......: 01/06/2011
+01375    ; Remarks .......:
+01376    ; Related .......: _LoadReferencesFromProject, _LoadDetailsFromProject
+01377    ; Link ..........;
+01378    ; Example .......;
+01379    ; ===============================================================================================================================
+01380  +-Func _LoadProject($sProjectFile)
+01381  |    ; Make sure the file exists and see if the project info section exists (validate).
+01382  |  +-If (FileExists($sProjectFile)) Then
+01383  |  |    Local $aSection = IniReadSection($sProjectFile, "AutoItProject")
+01384  |  |  +-If ((@error) Or ($aSection[0][0] == 0)) Then
+01385  |  |  |    MsgBox(16, $MY_NAME, "The specified file is not a valid " & $MY_NAME & " project file.")
+01386  |  |  |    _ResetForm()
+01387  |  |  |    Return False
+01388  |  |  +-Else
+01389  |  |  |    ; Get the project type.
+01390  |  |  |    $aSection = 0
+01391  |  |  |    Local $nProjType = Int(StringStripWS(IniRead($sProjectFile, "AutoItProject", "ProjectType", ""), 8))
+01392  |  |  |  +-If ($nProjType == $PROJ_TYPE_LIB) Then
+01393  |  |  |  |    GUICtrlSetState($RadioLib, $GUI_CHECKED)
+01394  |  |  |  +-EndIf
+01395  |  |  |    
+01396  |  |  |    ; Get the project name.
+01397  |  |  |    Dim $sProjName = IniRead($sProjectFile, "AutoItProject", "Name", "")
+01398  |  |  |    GUICtrlSetData($InputProjName, $sProjName)
+01399  |  |  |  +-If (StringLen($sProjName) == 0) Then
+01400  |  |  |  |    MsgBox(16, $MY_NAME, "The specified project file does not define a project name." & @CRLF & _
+01401  |  |  |  |  |       		"The specified project is invalid.")
+01402  |  |  |  |    _ResetForm()
+01403  |  |  |  |    Return False
+01404  |  |  |  +-EndIf
+01405  |  |  |    
+01406  |  |  |    ; Get the project path.
+01407  |  |  |    Local $sProjPath = IniRead($sProjectFile, "AutoItProject", "Path", "")
+01408  |  |  |  +-If (StringLen($sProjPath) == 0) Then
+01409  |  |  |  |    MsgBox(16, $MY_NAME, "The specified project file does not contain a project path.")
+01410  |  |  |  |    _ResetForm()
+01411  |  |  |  |    Return False
+01412  |  |  |  +-EndIf
+01413  |  |  |    
+01414  |  |  |    ; Make sure the project path is a directory.
+01415  |  |  |  +-If (Not _FileIsDir($sProjPath)) Then
+01416  |  |  |  |    MsgBox(16, $MY_NAME, "The specified project path does not exist:" & @CRLF & $sProjPath)
+01417  |  |  |  |    _ResetForm()
+01418  |  |  |  |    Return False
+01419  |  |  |  +-EndIf
+01420  |  |  |    
+01421  |  |  |    ; Fixup the path string.
+01422  |  |  |  +-If (StringRight($sProjPath, 1) <> "\") Then
+01423  |  |  |  |    $sProjPath &= "\"
+01424  |  |  |  +-EndIf
+01425  |  |  |    GUICtrlSetData($InputFullPath, $sProjPath)
+01426  |  |  |    
+01427  |  |  |    ; Get the full path to the main project script.
+01428  |  |  |    Local $sMainScript = IniRead($sProjectFile, "AutoItProject", "MainScriptName", "")
+01429  |  |  |  +-If (StringLen($sMainScript) == 0) Then
+01430  |  |  |  |    MsgBox(16, $MY_NAME, "The specified project file does not define the main script source file to use.")
+01431  |  |  |  |    _ResetForm()
+01432  |  |  |  |    Return False
+01433  |  |  |  +-EndIf
+01434  |  |  |    
+01435  |  |  |    ; See if the main script is a child of the project directory.
+01436  |  |  |  +-If (StringLeft($sMainScript, 1) == "\") Then
+01437  |  |  |  |    $sMainScript = StringRight($sMainScript, StringLen($sMainScript) - 1)
+01438  |  |  |  +-EndIf
+01439  |  |  |    GUICtrlSetData($InputMainScript, $sMainScript)
+01440  |  |  |    
+01441  |  |  |    ; Get the config file name if present.
+01442  |  |  |  +-If (GUICtrlRead($RadioApp) == $GUI_CHECKED) Then
+01443  |  |  |  |    Local $sConfigFile = IniRead($sProjectFile, "AutoItProject", "ConfigFileName", "")
+01444  |  |  |  |  +-If (StringLen($sConfigFile) > 0) Then
+01445  |  |  |  |  |  +-If (StringLeft($sConfigFile, 1) == "\") Then
+01446  |  |  |  |  |  |    $sConfigFile = StringRight($sConfigFile, StringLen($sConfigFile) - 1)
+01447  |  |  |  |  |  +-EndIf
+01448  |  |  |  |  |    GUICtrlSetData($InputConfigName, $sConfigFile)
+01449  |  |  |  |  |    GUICtrlSetState($InputConfigName, $GUI_ENABLE)
+01450  |  |  |  |  |    GUICtrlSetState($CheckboxUseConfig, $GUI_ENABLE + $GUI_CHECKED)
+01451  |  |  |  |  +-EndIf
+01452  |  |  |  +-EndIf
+01453  |  |  |    
+01454  |  |  |    ; Get the Include copy policy.
+01455  |  |  |    Local $nCopyMode = Int(StringStripWS(IniRead($sProjectFile, "AutoItProject", "CopyLibPolicy", 0), 8))
+01456  |  |  |  +-If (($nCopyMode == $CP_ALWAYS) Or ($nCopyMode == $CP_IFNEWER) Or ($nCopyMode == $CP_IFNOTEXIST)) Then
+01457  |  |  |  |    _GUICtrlComboBox_SetCurSel($ComboCopyPolicy, $nCopyMode)
+01458  |  |  |  +-EndIf
+01459  |  |  |    
+01460  |  |  |    ; Load all the project references.
+01461  |  |  |    _LoadReferencesFromProject($sProjectFile)
+01462  |  |  |    
+01463  |  |  |    ; Load the project details.
+01464  |  |  |    _LoadDetailsFromProject($sProjectFile)
+01465  |  |  +-EndIf
+01466  |  +-EndIf
+01467  |    Return True
+01468  +-EndFunc   ;==>_LoadProject
+01469    
+01470    ; #FUNCTION# ====================================================================================================================
+01471    ; Name...........: _CreateNewProjectFile
+01472    ; Description ...: Creates a default project file at the specified path.
+01473    ; Syntax.........: _CreateNewProjectFile($sProjectFilePath)
+01474    ; Parameters ....: $sProjectFilePath - The full path to the project file to write to. If it exists, it will be overwritten.
+01475    ; Return values .: None. On error, sets @error to the following:
+01476    ;                  |1 - The specified project file path could not be written to.
+01477    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01478    ; Modified.......:
+01479    ; Remarks .......:
+01480    ; Related .......:
+01481    ; Link ..........;
+01482    ; Example .......;
+01483    ; ===============================================================================================================================
+01484  +-Func _CreateNewProjectFile($sProjectFilePath)
+01485  |    ConsoleWrite($MY_NAME & ": Project file doesn't exist. Creating...." & @CRLF)
+01486  |    Local $hProjFileHandle = FileOpen($sProjectFilePath, 2)
+01487  |  +-If ($hProjFileHandle == -1) Then
+01488  |  |    Return SetError(1)
+01489  |  +-EndIf
+01490  |    
+01491  |    FileWriteLine($hProjFileHandle, "; *** This file was generated by a tool. " & $MY_NAME & " v" & _GetMyVersion() & ".")
+01492  |    FileWriteLine($hProjFileHandle, "; *** " & $MY_NAME & " project descriptor file. Unless you know what you are doing,")
+01493  |    FileWriteLine($hProjFileHandle, "; *** DO NOT modify any of the lines below. Please refer to the documentation.")
+01494  |    FileWriteLine($hProjFileHandle, "")
+01495  |    FileWriteLine($hProjFileHandle, "[AutoItProject]")
+01496  |    FileWriteLine($hProjFileHandle, "; Acceptable values: 1 = application script, 2 = library (include) script")
+01497  |    FileWriteLine($hProjFileHandle, "ProjectType=" & $PROJ_TYPE_APP)
+01498  |    FileWriteLine($hProjFileHandle, "Name=")
+01499  |    FileWriteLine($hProjFileHandle, "; The full path to the project directory.")
+01500  |    FileWriteLine($hProjFileHandle, "Path=")
+01501  |    FileWriteLine($hProjFileHandle, "; The main script name (filename only).")
+01502  |    FileWriteLine($hProjFileHandle, "MainScriptName=")
+01503  |    FileWriteLine($hProjFileHandle, "ConfigFileName=")
+01504  |    FileWriteLine($hProjFileHandle, "; Acceptable values: 0 = if newer, 1 = always (overwrite), 2 = if not exist in project")
+01505  |    FileWriteLine($hProjFileHandle, "CopyLibPolicy=0")
+01506  |    FileWriteLine($hProjFileHandle, "")
+01507  |    FileWriteLine($hProjFileHandle, "[References]")
+01508  |    FileWriteLine($hProjFileHandle, "; Each include should be prefixed with the word 'Lib' followed by a sequential number.")
+01509  |    FileWriteLine($hProjFileHandle, "; Example: Lib1=Array.au3")
+01510  |    FileWriteLine($hProjFileHandle, "; Example: Lib2=Date.au3")
+01511  |    FileWriteLine($hProjFileHandle, "Lib1=")
+01512  |    FileWriteLine($hProjFileHandle, "")
+01513  |    FileWriteLine($hProjFileHandle, "[Details]")
+01514  |    FileWriteLine($hProjFileHandle, "; Must be a four-octet version string. Example: 1.0.2.1")
+01515  |    FileWriteLine($hProjFileHandle, "AutoItVer=" & @AutoItVersion)
+01516  |    FileWriteLine($hProjFileHandle, "Author=")
+01517  |    FileWriteLine($hProjFileHandle, "; Must be a four-octet version string. Example: 1.0.2.1")
+01518  |    FileWriteLine($hProjFileHandle, "ScriptVer=1.0.0.0")
+01519  |    FileWriteLine($hProjFileHandle, "; Dates must be in YYYY/MM/DD format or they will be ignored.")
+01520  |    FileWriteLine($hProjFileHandle, "Date=" & _NowCalcDate())
+01521  |    FileWriteLine($hProjFileHandle, "Modified=" & _NowCalcDate())
+01522  |    FileWriteLine($hProjFileHandle, "Company=")
+01523  |    FileWriteLine($hProjFileHandle, "Copyright=")
+01524  |    FileWriteLine($hProjFileHandle, "; Any line breaks or carriage returns (multi-line) in the description must be replaced with the pipe character '|'.")
+01525  |    FileWriteLine($hProjFileHandle, "Description=")
+01526  |    FileWriteLine($hProjFileHandle, "; Acceptable values: True - the main script will contain GUI code. False - the main script will not have a GUI.")
+01527  |    FileWriteLine($hProjFileHandle, "HasGUI=False")
+01528  |    FileWriteLine($hProjFileHandle, "; Acceptable values: True - the main script requires administrative rights, False - user rights are sufficient.")
+01529  |    FileWriteLine($hProjFileHandle, "RequireAdmin=False")
+01530  |    FileFlush($hProjFileHandle)
+01531  |    FileClose($hProjFileHandle)
+01532  |    Return
+01533  +-EndFunc   ;==>_CreateNewProjectFile
+01534    
+01535    ; #FUNCTION# ====================================================================================================================
+01536    ; Name...........: _WriteProjectFile
+01537    ; Description ...: Writes project settings to the specified project file. If the file does not exist, it will be created.
+01538    ; Syntax.........: _WriteProjectFile($sProjectFile, $aProjectInfo[, $aReferences[, $iHasGui[, $iRequireAdmin[, $isLib]]]])
+01539    ; Parameters ....: $sProjectFile  - The full path to the project file to write to. If it does not exist, it will be created.
+01540    ;                  $aProjectInfo  - An array containing project info. See _WriteApplicationScript() for definition.
+01541    ;                  $aReferences   - Optional. An array containing project references (includes). See _WriteApplicationScript for definition.
+01542    ;                  $iHasGui       - Optional. Set True if the project has/will have a GUI.
+01543    ;                  $iRequireAdmin - Optional. Set True if the project requires/will require administrative privileges.
+01544    ;                  $isLib         - Optional. Set True if this project is a library (include). This will cause $iRequireAdmin and
+01545    ;                                   $iHasGui to be ignored.
+01546    ;                  $sConfigName   - Optional. The name of the config file to associate with the application script.
+01547    ;                                   Ignored if $isLib = True.
+01548    ; Return values .: None. On error, sets @error to one of the following:
+01549    ;                  |1 - The project file path was not specified.
+01550    ;                  |2 - The specified file is not an AutoIt project file.
+01551    ;                  |3 - An invalid project info array was specified.
+01552    ;                  |4 - The specified project file could not be written to.
+01553    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01554    ; Modified.......: 02/14/2011
+01555    ; Remarks .......:
+01556    ; Related .......: _LoadProject, _CreateNewProjectFile
+01557    ; Link ..........;
+01558    ; Example .......;
+01559    ; ===============================================================================================================================
+01560  +-Func _WriteProjectFile($sProjectFilePath, $aProjectInfo, $aReferences = 0, $iHasGui = False, $iRequireAdmin = False, $isLib = False, $sConfigName = "")
+01561  |    ConsoleWrite($MY_NAME & ": Saving project file..." & @CRLF)
+01562  |    ; Was a file path specified?
+01563  |  +-If (StringLen($sProjectFilePath) == 0) Then
+01564  |  |    Return SetError(1)
+01565  |  +-EndIf
+01566  |    
+01567  |    ; Does the path have a valid extension?
+01568  |  +-If (_FileExtension($sProjectFilePath) <> $PROJECT_FILE_EXT) Then
+01569  |  |    Return SetError(2)
+01570  |  +-EndIf
+01571  |    
+01572  |    ; Do we have a valid project info array?
+01573  |  +-If ((Not IsArray($aProjectInfo)) Or ($aProjectInfo[0] <> 9)) Then
+01574  |  |    Return SetError(3)
+01575  |  +-EndIf
+01576  |    
+01577  |    ; If the project file doesn't already exist, generate one at the specified path.
+01578  |  +-If (Not FileExists($sProjectFilePath)) Then
+01579  |  |    _CreateNewProjectFile($sProjectFilePath)
+01580  |  |  +-If (@error) Then
+01581  |  |  |    Return SetError(4)
+01582  |  |  +-EndIf
+01583  |  +-EndIf
+01584  |    
+01585  |    ; Write all the settings to the project file.
+01586  |  +-If ($isLib) Then
+01587  |  |    IniWrite($sProjectFilePath, "AutoItProject", "ProjectType", $PROJ_TYPE_LIB)
+01588  |  +-Else
+01589  |  |    IniWrite($sProjectFilePath, "AutoItProject", "ProjectType", $PROJ_TYPE_APP)
+01590  |  +-EndIf
+01591  |    IniWrite($sProjectFilePath, "AutoItProject", "Name", $aProjectInfo[4])
+01592  |    IniWrite($sProjectFilePath, "AutoItProject", "Path", GUICtrlRead($InputFullPath))
+01593  |    IniWrite($sProjectFilePath, "AutoItProject", "MainScriptName", GUICtrlRead($InputMainScript))
+01594  |    
+01595  |  +-If (StringLen($sConfigName) > 0) Then
+01596  |  |    IniWrite($sProjectFilePath, "AutoItProject", "ConfigFileName", $sConfigName)
+01597  |  +-Else
+01598  |  |    IniWrite($sProjectFilePath, "AutoItProject", "ConfigFileName", "")
+01599  |  +-EndIf
+01600  |    
+01601  |    Local $nPolicy = _GUICtrlComboBox_GetCurSel($ComboCopyPolicy)
+01602  |  +-If (($nPolicy == $CP_ALWAYS) Or ($nPolicy == $CP_IFNEWER) Or ($nPolicy == $CP_IFNOTEXIST)) Then
+01603  |  |    IniWrite($sProjectFilePath, "AutoItProject", "CopyLibPolicy", $nPolicy)
+01604  |  +-Else
+01605  |  |    IniWrite($sProjectFilePath, "AutoItProject", "CopyLibPolicy", 0)
+01606  |  +-EndIf
+01607  |    
+01608  |    ; Remove all the includes currently in the project file.
+01609  |    Local $k = 0
+01610  |    Local $aKeys = IniReadSection($sProjectFilePath, "References")
+01611  |  +-If ((Not @error) And (IsArray($aKeys))) Then
+01612  |  |  +-For $k = 1 To $aKeys[0][0]
+01613  |  |  |    IniDelete($sProjectFilePath, "References", $aKeys[$k][0])
+01614  |  |  +-Next
+01615  |  +-EndIf
+01616  |    
+01617  |    ; Write the current contents of the includes array to the config file.
+01618  |  +-If ((IsArray($aReferences)) And ($aReferences[0] > 0)) Then
+01619  |  |  +-For $k = 1 To $aReferences[0]
+01620  |  |  |    IniWrite($sProjectFilePath, "References", "Lib" & $k, $aReferences[$k])
+01621  |  |  +-Next
+01622  |  +-EndIf
+01623  |    
+01624  |    IniWrite($sProjectFilePath, "Details", "AutoItVer", $aProjectInfo[1])
+01625  |    IniWrite($sProjectFilePath, "Details", "Author", $aProjectInfo[2])
+01626  |    IniWrite($sProjectFilePath, "Details", "ScriptVer", $aProjectInfo[3])
+01627  |    IniWrite($sProjectFilePath, "Details", "Date", $aProjectInfo[5])
+01628  |    IniWrite($sProjectFilePath, "Details", "Modified", $aProjectInfo[6])
+01629  |    IniWrite($sProjectFilePath, "Details", "Company", $aProjectInfo[7])
+01630  |    IniWrite($sProjectFilePath, "Details", "Copyright", $aProjectInfo[8])
+01631  |    
+01632  |    Local $sDescription = $aProjectInfo[9]
+01633  |  +-If (StringInStr($sDescription, @CRLF) > 0) Then
+01634  |  |    $sDescription = StringReplace($sDescription, @CRLF, "|")
+01635  |  +-EndIf
+01636  |    IniWrite($sProjectFilePath, "Details", "Description", $sDescription)
+01637  |    
+01638  |  +-If ($iHasGui) Then
+01639  |  |    IniWrite($sProjectFilePath, "Details", "HasGUI", "True")
+01640  |  +-Else
+01641  |  |    IniWrite($sProjectFilePath, "Details", "HasGUI", "False")
+01642  |  +-EndIf
+01643  |    
+01644  |  +-If ($iRequireAdmin) Then
+01645  |  |    IniWrite($sProjectFilePath, "Details", "RequireAdmin", "True")
+01646  |  +-Else
+01647  |  |    IniWrite($sProjectFilePath, "Details", "RequireAdmin", "False")
+01648  |  +-EndIf
+01649  |    Return
+01650  +-EndFunc   ;==>_WriteProjectFile
+01651    
+01652    ; #FUNCTION# ====================================================================================================================
+01653    ; Name...........: _EditScript
+01654    ; Description ...: Opens the specified script file in the SciTE code editor.
+01655    ; Syntax.........: _EditScript($sScript)
+01656    ; Parameters ....: $sScript - The full path to the script file to edit.
+01657    ; Return values .: None. On error, sets @error to one of the following:
+01658    ;                  |1 - The specified script does not exist.
+01659    ;                  |2 - The SciTE executable could not be found.
+01660    ;                  |3 - The editor could not be launched.
+01661    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01662    ; Modified.......:
+01663    ; Remarks .......: If the editor (SciTE) is not already running, it will be launched and then the script will be opened in it.
+01664    ;                  If the editor is already running, then the script will be opened in a new tab.
+01665    ; Related .......:
+01666    ; Link ..........;
+01667    ; Example .......;
+01668    ; ===============================================================================================================================
+01669  +-Func _EditScript($sScript)
+01670  |    ; Make sure the script exists.
+01671  |  +-If (Not FileExists($sScript)) Then
+01672  |  |    Return SetError(1)
+01673  |  +-EndIf
+01674  |    
+01675  |    ; Make sure the SciTE editor exists.
+01676  |    Local $sSciteExecPath = _GetSciteExec()
+01677  |  +-If (StringLen($sSciteExecPath) == 0) Then
+01678  |  |    Return SetError(2)
+01679  |  +-EndIf
+01680  |    
+01681  |    ; Open the script in SciTE.
+01682  |    Local $result = ShellExecute($sSciteExecPath, '"' & $sScript & '"', GUICtrlRead($InputLocation))
+01683  |  +-If ($result == 0) Then
+01684  |  |    Return SetError(3)
+01685  |  +-EndIf
+01686  |    Return
+01687  +-EndFunc   ;==>_EditScript
+01688    
+01689    ; #FUNCTION# ====================================================================================================================
+01690    ; Name...........: _GetScriptEditResult
+01691    ; Description ...: Gets the error description message associated with the specified script edit error code.
+01692    ; Syntax.........: _GetScriptEditResult($nResultCode)
+01693    ; Parameters ....: $nResultCode - The @error code returned by _EditScript.
+01694    ; Return values .: Success - The error message associated with the specified code.
+01695    ;                  Failure - "(unknown)" if the specified value is not an integer or valid result code.
+01696    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01697    ; Modified.......:
+01698    ; Remarks .......:
+01699    ; Related .......: _EditScript
+01700    ; Link ..........;
+01701    ; Example .......;
+01702    ; ===============================================================================================================================
+01703  +-Func _GetScriptEditResult($nResultCode)
+01704  |    Local $sResult = "(unknown)"
+01705  |  +-If (IsInt($nResultCode)) Then
+01706  |  |  +-Switch $nResultCode
+01707  |  |  |  +-Case 1
+01708  |  |  |  |    $sResult = "The script path could not be found."
+01709  |  |  |  +-Case 2
+01710  |  |  |  |    $sResult = "Could not locate SciTE. Please make sure SciTE4AutoIt3 is installed."
+01711  |  |  |  +-Case 3
+01712  |  |  |  |    $sResult = "Failed to execute SciTE."
+01713  |  |  +-EndSwitch
+01714  |  +-EndIf
+01715  |    Return $sResult
+01716  +-EndFunc   ;==>_GetScriptEditResult
+01717    
+01718    ; #FUNCTION# ====================================================================================================================
+01719    ; Name...........: _GetAppConfigGenerationResult
+01720    ; Description ...: Gets the error description message associated with the specified app config generation error code.
+01721    ; Syntax.........: _GetAppConfigGenerationResult($nResultCode)
+01722    ; Parameters ....: $nResultCode - The @error code returned by _CreateApplicationConfig.
+01723    ; Return values .: Success - The error message associated with the specified code.
+01724    ;                  Failure - "(unknown)" if the specified value is not an integer or valid result code.
+01725    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01726    ; Modified.......:
+01727    ; Remarks .......:
+01728    ; Related .......: _CreateApplicationConfig
+01729    ; Link ..........;
+01730    ; Example .......;
+01731    ; ===============================================================================================================================
+01732  +-Func _GetAppConfigGenerationResult($nResultCode)
+01733  |    Local $sResult = "(unknown)"
+01734  |  +-If (IsInt($nResultCode)) Then
+01735  |  |  +-Switch $nResultCode
+01736  |  |  |  +-Case 1
+01737  |  |  |  |    $sResult = "The specified param value ($aProjectInfo) is not a valid project info array structure."
+01738  |  |  |  +-Case 2
+01739  |  |  |  |    $sResult = "The specified configuration path is not a valid config file path or is a file that already exists."
+01740  |  |  |  +-Case 3
+01741  |  |  |  |    $sResult = "The config file could not be created or opened for writing."
+01742  |  |  +-EndSwitch
+01743  |  +-EndIf
+01744  |    Return $sResult
+01745  +-EndFunc   ;==>_GetAppConfigGenerationResult
+01746    
+01747    ; #FUNCTION# ====================================================================================================================
+01748    ; Name...........: _GetScriptGenerationResult
+01749    ; Description ...: Gets the error description message associated with the specified script generation error code.
+01750    ; Syntax.........: _GetScriptGenerationResult($nResultCode)
+01751    ; Parameters ....: $nResultCode - The @error code returned by _WriteProjectFile().
+01752    ; Return values .: Success - The error message associated with the specified code.
+01753    ;                  Failure - "(unknown)" if the specified value is not an integer or valid result code.
+01754    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01755    ; Modified.......:
+01756    ; Remarks .......:
+01757    ; Related .......: _WriteProjectFile
+01758    ; Link ..........;
+01759    ; Example .......;
+01760    ; ===============================================================================================================================
+01761  +-Func _GetScriptGenerationResult($nResultCode)
+01762  |    Local $sResult = "(unknown)"
+01763  |  +-If (IsInt($nResultCode)) Then
+01764  |  |  +-Switch $nResultCode
+01765  |  |  |  +-Case 1
+01766  |  |  |  |    $sResult = "The provided script path is null, empty, or not a string."
+01767  |  |  |  +-Case 2
+01768  |  |  |  |    $sResult = "The parent directory does not exist. Cannot create a script in a non-existent directory."
+01769  |  |  |  +-Case 3
+01770  |  |  |  |    $sResult = "A valid project information array was not provided."
+01771  |  |  |  +-Case 4
+01772  |  |  |  |    $sResult = "Unable to create the file or open in write mode."
+01773  |  |  +-EndSwitch
+01774  |  +-EndIf
+01775  |    Return $sResult
+01776  +-EndFunc   ;==>_GetScriptGenerationResult
+01777    
+01778    ; #FUNCTION# ====================================================================================================================
+01779    ; Name...........: _GetProjectGenerationResult
+01780    ; Description ...: Gets the error description message associated with the specified project file generation error code.
+01781    ; Syntax.........: _GetProjectGenerationResult($nResultCode)
+01782    ; Parameters ....: $nResultCode - The @error code returned by _GenerateScript()
+01783    ; Return values .: Success - The error message associated with the specified code.
+01784    ;                  Failure - "(unknown)" if the specified value is not an integer or valid result code.
+01785    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01786    ; Modified.......:
+01787    ; Remarks .......:
+01788    ; Related .......: _GenerateScript
+01789    ; Link ..........;
+01790    ; Example .......;
+01791    ; ===============================================================================================================================
+01792  +-Func _GetProjectGenerationResult($nResultCode)
+01793  |    Local $sResult = "(unknown)"
+01794  |  +-If (IsInt($nResultCode)) Then
+01795  |  |  +-Switch $nResultCode
+01796  |  |  |  +-Case 1
+01797  |  |  |  |    $sResult = "The project file path was not specified."
+01798  |  |  |  +-Case 2
+01799  |  |  |  |    $sResult = "The specified file is not an AutoIt project file."
+01800  |  |  |  +-Case 3
+01801  |  |  |  |    $sResult = "An invalid project info array was specified."
+01802  |  |  |  +-Case 4
+01803  |  |  |  |    $sResult = "The specified project file could not be written to."
+01804  |  |  +-EndSwitch
+01805  |  +-EndIf
+01806  |    Return $sResult
+01807  +-EndFunc   ;==>_GetProjectGenerationResult
+01808    
+01809    ; #FUNCTION# ====================================================================================================================
+01810    ; Name...........: _CopyLibs
+01811    ; Description ...: Copies an array of includes the the project.
+01812    ; Syntax.........: _CopyLibs($aReferences, $sTarget[, $iCopyMode])
+01813    ; Parameters ....: $aReferences - An array of includes. Only the includes that are non-standard and not sourced from a child
+01814    ;                                 directory of the project will be copied to the target.
+01815    ;                  $sTarget     - The target directory to copy the includes to.
+01816    ;                  $iCopyMode   - Optional. Can be one of the copy mode constants:
+01817    ;                                 |$CP_IFNEWER    - The include will only be copied if the file does not already exist in the target
+01818    ;                                                   directory. If the file does exist, then the file will be copied if the source is
+01819    ;                                                   newer than the target. This is the default.
+01820    ;                                 |$CP_ALWAYS     - Copies the source file to the target, overwriting the target file if it exists.
+01821    ;                                 |$CP_IFNOTEXIST - The source file will only be copied if it does not already exist in the target.
+01822    ; Return values .: None. On error, sets @error to one of the following:
+01823    ;                  |1 - A file copy was attempted, but failed.
+01824    ;                  Sets @extended to the index in $aReferences, which represents the file that could not be copied.
+01825    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01826    ; Modified.......: 01/26/2011
+01827    ; Remarks .......:
+01828    ; Related .......:
+01829    ; Link ..........;
+01830    ; Example .......;
+01831    ; ===============================================================================================================================
+01832  +-Func _CopyLibs($aReferences, $sTarget, $iCopyMode = $CP_IFNEWER)
+01833  |  +-If ((IsArray($aReferences)) And ($aReferences[0] > 0)) Then
+01834  |  |  +-If (StringRight($sTarget, 1) <> "\") Then
+01835  |  |  |    $sTarget &= "\"
+01836  |  |  +-EndIf
+01837  |  |    
+01838  |  |    Local $sFile = ""
+01839  |  |    Local $fileIdx = 0
+01840  |  |  +-For $fileIdx = 1 To $aReferences[0]
+01841  |  |  |    ; We only try to copy non-standard libraries that were not sourced from a child directory of the project.
+01842  |  |  |    $sFile = $aReferences[$fileIdx]
+01843  |  |  |  +-If (StringRegExp($sFile, "[[:alpha:]]\:\\.+", 0) == 1) Then
+01844  |  |  |  |  +-If (FileExists($sFile)) Then
+01845  |  |  |  |  |    Local $flagCopy = 8 ; We're going to attempt to create the target directory structure regardless.
+01846  |  |  |  |  |    Local $iProceed = True ; We're assuming that we're going to proceed with the copy by default.
+01847  |  |  |  |  |    Local $sTargetFile = $sTarget & _FileGetFileName($sFile)
+01848  |  |  |  |  |  +-Switch $iCopyMode
+01849  |  |  |  |  |  |  +-Case $CP_ALWAYS
+01850  |  |  |  |  |  |  |    ; Attempt to copy no matter what.
+01851  |  |  |  |  |  |  |    $flagCopy += 1
+01852  |  |  |  |  |  |  |    
+01853  |  |  |  |  |  |  +-Case $CP_IFNEWER
+01854  |  |  |  |  |  |  |    ; If the target already exists, then we only copy if the source is newer than the target.
+01855  |  |  |  |  |  |  |  +-If (FileExists($sTargetFile)) Then
+01856  |  |  |  |  |  |  |  |    ; Get and encode the source file modified time.
+01857  |  |  |  |  |  |  |  |    Local $aSourceTime = FileGetTime($sFile)
+01858  |  |  |  |  |  |  |  |    Local $tSourceTime = _Date_Time_EncodeFileTime($aSourceTime[1], $aSourceTime[2], $aSourceTime[0], _
+01859  |  |  |  |  |  |  |  |  |       		$aSourceTime[3], $aSourceTime[4], $aSourceTime[5])
+01860  |  |  |  |  |  |  |  |    Local $pSourceTime = DllStructGetPtr($tSourceTime)
+01861  |  |  |  |  |  |  |  |    $aSourceTime = 0
+01862  |  |  |  |  |  |  |  |    
+01863  |  |  |  |  |  |  |  |    ; Get and encode the target file modified time.
+01864  |  |  |  |  |  |  |  |    Local $aTargetTime = FileGetTime($sTargetFile)
+01865  |  |  |  |  |  |  |  |    Local $tTargetTime = _Date_Time_EncodeFileTime($aTargetTime[1], $aTargetTime[2], $aTargetTime[0], _
+01866  |  |  |  |  |  |  |  |  |       		$aTargetTime[3], $aTargetTime[4], $aTargetTime[5])
+01867  |  |  |  |  |  |  |  |    Local $pTargetTime = DllStructGetPtr($tTargetTime)
+01868  |  |  |  |  |  |  |  |    $aTargetTime = 0
+01869  |  |  |  |  |  |  |  |    
+01870  |  |  |  |  |  |  |  |    ; Check to see if the source file is newer than the target. If so, then we'll overwrite the target.
+01871  |  |  |  |  |  |  |  |  +-If (_Date_Time_CompareFileTime($pSourceTime, $pTargetTime) == 1) Then
+01872  |  |  |  |  |  |  |  |  |    $flagCopy += 1
+01873  |  |  |  |  |  |  |  |  +-Else
+01874  |  |  |  |  |  |  |  |  |    $iProceed = False
+01875  |  |  |  |  |  |  |  |  +-EndIf
+01876  |  |  |  |  |  |  |  +-EndIf
+01877  |  |  |  |  |  |  |    
+01878  |  |  |  |  |  |  +-Case $CP_IFNOTEXIST
+01879  |  |  |  |  |  |  |    ; If the target file exists, then we don't try to copy at all.
+01880  |  |  |  |  |  |  |  +-If (FileExists($sTargetFile)) Then
+01881  |  |  |  |  |  |  |  |    $iProceed = False
+01882  |  |  |  |  |  |  |  +-EndIf
+01883  |  |  |  |  |  +-EndSwitch
+01884  |  |  |  |  |    
+01885  |  |  |  |  |    ; If we are still ok to proceed, then go ahead and copy the file.
+01886  |  |  |  |  |  +-If ($iProceed) Then
+01887  |  |  |  |  |  |    ConsoleWrite($MY_NAME & ": Copying '" & $sFile & "' to '" & $sTarget & "' ..." & @CRLF)
+01888  |  |  |  |  |  |  +-If (FileCopy($sFile, $sTarget, $flagCopy) == 0) Then
+01889  |  |  |  |  |  |  |    Return SetError(1, $fileIdx)
+01890  |  |  |  |  |  |  +-EndIf
+01891  |  |  |  |  |  +-EndIf
+01892  |  |  |  |  +-EndIf
+01893  |  |  |  +-EndIf
+01894  |  |  +-Next
+01895  |  +-EndIf
+01896  |    Return
+01897  +-EndFunc   ;==>_CopyLibs
+01898    #EndRegion Utility Functions
+01899    
+01900    
+01901    #Region Event Handlers
+01902    ; #FUNCTION# ====================================================================================================================
+01903    ; Name...........: _ButtonProjectBrowseClick
+01904    ; Description ...: Handler for the "browse for projects location" button click event. Presents the user with a folder selection
+01905    ;                  dialog and then populates the location InputTextbox.
+01906    ; Syntax.........: _ButtonProjectBrowseClick()
+01907    ; Parameters ....: None.
+01908    ; Return values .: None.
+01909    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01910    ; Modified.......:
+01911    ; Remarks .......:
+01912    ; Related .......:
+01913    ; Link ..........;
+01914    ; Example .......;
+01915    ; ===============================================================================================================================
+01916  +-Func _ButtonProjectBrowseClick()
+01917  |    ; Present the user with a folder selection/browse dialog.
+01918  |    Local $sProjectsDir = FileSelectFolder("Select the projects folder", "", 1 + 2 + 4, @MyDocumentsDir, $FormMain)
+01919  |  +-If ((Not @error) And (StringLen($sProjectsDir) > 0)) Then
+01920  |  |    ; If the user didn't cancel and we got a valid path, populate the project location Inputbox and call the
+01921  |  |    ; _InputLocationChange event handler (GUICtrlSetData() does not trigger the event automatically).
+01922  |  |    GUICtrlSetData($InputLocation, $sProjectsDir)
+01923  |  |    _InputLocationChange()
+01924  |  +-EndIf
+01925  |    Return
+01926  +-EndFunc   ;==>_ButtonProjectBrowseClick
+01927    
+01928    ; #FUNCTION# ====================================================================================================================
+01929    ; Name...........: _ButtonAddLibClick
+01930    ; Description ...: Handler for the add library button click event. Moves the selected libraries from the source listview control
+01931    ;                  to the target listview control.
+01932    ; Syntax.........: _ButtonAddLibClick()
+01933    ; Parameters ....: None.
+01934    ; Return values .: None.
+01935    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01936    ; Modified.......: 01/09/2011
+01937    ; Remarks .......:
+01938    ; Related .......:
+01939    ; Link ..........;
+01940    ; Example .......;
+01941    ; ===============================================================================================================================
+01942  +-Func _ButtonAddLibClick()
+01943  |    Local $i = 0
+01944  |    Local $sItemText = ""
+01945  |    ; Get handles for both listview controls.
+01946  |    Local $hSrcHandle = GUICtrlGetHandle($ListViewSourceLibs)
+01947  |    Local $hTargHandle = GUICtrlGetHandle($ListViewTargetLibs)
+01948  |    ; Block repainting of the listviews until we are done.
+01949  |    _GUICtrlListView_BeginUpdate($hSrcHandle)
+01950  |    _GUICtrlListView_BeginUpdate($hTargHandle)
+01951  |    ; Get a list of selected items from the source listview control.
+01952  |    Local $aSelectedIndices = _GUICtrlListView_GetSelectedIndices($hSrcHandle, True)
+01953  |  +-If ((IsArray($aSelectedIndices)) And ($aSelectedIndices[0] > 0)) Then
+01954  |  |    ; Add each selected item in the source listview to the target listview, if it does not already exist.
+01955  |  |  +-For $i = 1 To $aSelectedIndices[0]
+01956  |  |  |    $sItemText = _GUICtrlListView_GetItemText($hSrcHandle, $aSelectedIndices[$i])
+01957  |  |  |  +-If (_GUICtrlListView_FindText($hTargHandle, $sItemText, -1, True) == -1) Then
+01958  |  |  |  |    _GUICtrlListView_AddItem($hTargHandle, $sItemText)
+01959  |  |  |  +-EndIf
+01960  |  |  +-Next
+01961  |  |    ; Now remove each selected item from the source listview control.
+01962  |  |    _GUICtrlListView_SetItemSelected($hSrcHandle, -1, False)
+01963  |  |  +-For $i = $aSelectedIndices[0] To 1 Step -1
+01964  |  |  |    _GUICtrlListView_DeleteItem($hSrcHandle, $aSelectedIndices[$i])
+01965  |  |  +-Next
+01966  |  +-EndIf
+01967  |    ; All done. Repaint the listview controls, clear the array, and free the handles.
+01968  |    _GUICtrlListView_EndUpdate($hTargHandle)
+01969  |    _GUICtrlListView_EndUpdate($hSrcHandle)
+01970  |    $aSelectedIndices = 0
+01971  |    $hTargHandle = 0
+01972  |    $hSrcHandle = 0
+01973  |    Return
+01974  +-EndFunc   ;==>_ButtonAddLibClick
+01975    
+01976    ; #FUNCTION# ====================================================================================================================
+01977    ; Name...........: _ButtonBrowseLibClick
+01978    ; Description ...: Handler for the "browse for library" button click event. Presents the user with a file selection dialog, then
+01979    ;                  adds the selected library to the target library listview control.
+01980    ; Syntax.........: _ButtonBrowseLibClick()
+01981    ; Parameters ....: None.
+01982    ; Return values .: Mone.
+01983    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+01984    ; Modified.......: 02/08/2011
+01985    ; Remarks .......:
+01986    ; Related .......: _ButtonAddLibClick
+01987    ; Link ..........;
+01988    ; Example .......;
+01989    ; ===============================================================================================================================
+01990  +-Func _ButtonBrowseLibClick()
+01991  |    ; If we opened a project (instead of creating one) then we'll start in the project directory,
+01992  |    ; otherwise we start in directory we executed from.
+01993  |    Local $startDir = $HOME
+01994  |  +-If ($iWasLoaded) Then
+01995  |  |    $startDir = _FileGetDirFromPath($projectFile)
+01996  |  +-EndIf
+01997  |    
+01998  |    ; Present the user with an open file dialog.
+01999  |    Local $sSelectedLib = FileOpenDialog("Select AutoItV3 Include File", $startDir, "AutoItV3 Script (*.au3)", 1 + 4, "", $FormMain)
+02000  |  +-If ((Not @error) And (StringLen($sSelectedLib) > 0)) Then
+02001  |  |    ; If the user didn't cancel and we have a valid path, then get the project path (if defined).
+02002  |  |    Local $sParent = $HOME
+02003  |  |    Local $sTemp = GUICtrlRead($InputFullPath)
+02004  |  |  +-If (StringLen($sTemp) > 0) Then
+02005  |  |  |    $sParent = $sTemp
+02006  |  |  |  +-If (StringRight($sParent, 1) <> "\") Then
+02007  |  |  |  |    $sParent &= "\"
+02008  |  |  |  +-EndIf
+02009  |  |  +-EndIf
+02010  |  |    
+02011  |  |    ; Get a handle to the target listview control and block repainting it until we are done.
+02012  |  |    Local $hTargHandle = GUICtrlGetHandle($ListViewTargetLibs)
+02013  |  |    _GUICtrlListView_BeginUpdate($hTargHandle)
+02014  |  |    Local $sRelativePath = ""
+02015  |  |    Local $sLibToAdd = ""
+02016  |  |    
+02017  |  |    ; Did the user select multiple files?
+02018  |  |  +-If (StringInStr($sSelectedLib, "|") > 0) Then
+02019  |  |  |    ; Multiple files returned. The first path in the array is the containing directory.
+02020  |  |  |    ; All subsequent array elements are the selected filenames in that directory.
+02021  |  |  |    ; Here we iterate through the array and build the full path to each library and
+02022  |  |  |    ; make sure we aren't trying to reference the main script of the project.
+02023  |  |  |    Local $j = 0
+02024  |  |  |    Local $sFilePath = ""
+02025  |  |  |    Local $aFiles = StringSplit($sSelectedLib, "|")
+02026  |  |  |  +-For $j = 2 To $aFiles[0]
+02027  |  |  |  |    $sFilePath = $aFiles[1] & "\" & $aFiles[$j]
+02028  |  |  |  |  +-If (StringLower($sFilePath) == StringLower(GUICtrlRead($InputMainScript))) Then
+02029  |  |  |  |  |    ; You can't import yourself, dummy.
+02030  |  |  |  |  |    MsgBox(16, $MY_NAME, "The main script cannot be added as a reference to itself.")
+02031  |  |  |  |  |    Return
+02032  |  |  |  |  +-EndIf
+02033  |  |  |  |    ; If the script is located somewhere in the project directory (either the root or a subdirectory)
+02034  |  |  |  |    ; then build a relative path string (to keep our #import statements short).
+02035  |  |  |  |  +-If (StringInStr($sFilePath, $sParent) > 0) Then
+02036  |  |  |  |  |    $sRelativePath = StringMid($sFilePath, StringLen($sParent) + 1)
+02037  |  |  |  |  |    $sLibToAdd = $sRelativePath
+02038  |  |  |  |  +-Else
+02039  |  |  |  |  |    $sLibToAdd = $sFilePath
+02040  |  |  |  |  +-EndIf
+02041  |  |  |  |    
+02042  |  |  |  |  +-If (_GUICtrlListView_FindText($hTargHandle, $sLibToAdd, -1, True) == -1) Then
+02043  |  |  |  |  |    _GUICtrlListView_AddItem($hTargHandle, $sLibToAdd)
+02044  |  |  |  |  +-EndIf
+02045  |  |  |  +-Next
+02046  |  |  |    $aFiles = 0
+02047  |  |  +-Else
+02048  |  |  |    ; A single file was selected.
+02049  |  |  |  +-If (StringLower($sSelectedLib) == StringLower(GUICtrlRead($InputMainScript))) Then
+02050  |  |  |  |    ; You can't import yourself, dummy.
+02051  |  |  |  |    MsgBox(16, $MY_NAME, "The main script cannot be added as a reference to itself.")
+02052  |  |  |  |    Return
+02053  |  |  |  +-EndIf
+02054  |  |  |    ; If the script is located somewhere in the project directory (either the root or a subdirectory)
+02055  |  |  |    ; then build a relative path string (to keep our #import statements short).
+02056  |  |  |  +-If (StringInStr($sSelectedLib, $sParent) > 0) Then
+02057  |  |  |  |    $sRelativePath = StringMid($sSelectedLib, StringLen($sParent) + 1)
+02058  |  |  |  |    $sLibToAdd = $sRelativePath
+02059  |  |  |  +-Else
+02060  |  |  |  |    $sLibToAdd = $sSelectedLib
+02061  |  |  |  +-EndIf
+02062  |  |  |    
+02063  |  |  |  +-If (_GUICtrlListView_FindText($hTargHandle, $sLibToAdd, -1, True) == -1) Then
+02064  |  |  |  |    _GUICtrlListView_AddItem($hTargHandle, $sLibToAdd)
+02065  |  |  |  +-EndIf
+02066  |  |  +-EndIf
+02067  |  |    _GUICtrlListView_EndUpdate($hTargHandle)
+02068  |  |    $hTargHandle = 0
+02069  |  +-EndIf
+02070  |    Return
+02071  +-EndFunc   ;==>_ButtonBrowseLibClick
+02072    
+02073    ; #FUNCTION# ====================================================================================================================
+02074    ; Name...........: _ButtonRemoveLibClick
+02075    ; Description ...: Handler for the "Remove Library" button click event. Moves the selected libraries from the target listview
+02076    ;                  control back to the source libraries listview control. Any selected target libraries that are not part of the
+02077    ;                  AutoItV3 standard base will just be removed from the target listview control.
+02078    ; Syntax.........: _ButtonRemoveLibClick()
+02079    ; Parameters ....: None.
+02080    ; Return values .: None.
+02081    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02082    ; Modified.......: 01/09/2011
+02083    ; Remarks .......:
+02084    ; Related .......:
+02085    ; Link ..........;
+02086    ; Example .......;
+02087    ; ===============================================================================================================================
+02088  +-Func _ButtonRemoveLibClick()
+02089  |    Local $i = 0
+02090  |    Local $sItemText = ""
+02091  |    ; Get handles for both listview controls.
+02092  |    Local $hSrcHandle = GUICtrlGetHandle($ListViewSourceLibs)
+02093  |    Local $hTargHandle = GUICtrlGetHandle($ListViewTargetLibs)
+02094  |    ; Block repainting of the listviews until we are done.
+02095  |    _GUICtrlListView_BeginUpdate($hSrcHandle)
+02096  |    _GUICtrlListView_BeginUpdate($hTargHandle)
+02097  |    ; Get a list of selected items from the target listview control.
+02098  |    Local $aSelectedIndices = _GUICtrlListView_GetSelectedIndices($hTargHandle, True)
+02099  |  +-If ((IsArray($aSelectedIndices)) And ($aSelectedIndices[0] > 0)) Then
+02100  |  |    ; Add each selected item in the target listview to the source listview if it is an AutoItV3 standard library
+02101  |  |    ; and does not already exist in the source listview.
+02102  |  |  +-For $i = 1 To $aSelectedIndices[0]
+02103  |  |  |    $sItemText = _GUICtrlListView_GetItemText($hTargHandle, $aSelectedIndices[$i])
+02104  |  |  |  +-If (StringInStr($sItemText, "\") == 0) Then
+02105  |  |  |  |  +-If (_GUICtrlListView_FindText($hSrcHandle, $sItemText, -1, True) == -1) Then
+02106  |  |  |  |  |    _GUICtrlListView_AddItem($hSrcHandle, $sItemText)
+02107  |  |  |  |  +-EndIf
+02108  |  |  |  +-EndIf
+02109  |  |  +-Next
+02110  |  |    ; Now remove each selected item from the source listview control.
+02111  |  |    _GUICtrlListView_SetItemSelected($hTargHandle, -1, False)
+02112  |  |  +-For $i = 1 To $aSelectedIndices[0]
+02113  |  |  |    _GUICtrlListView_DeleteItem($hTargHandle, $aSelectedIndices[$i])
+02114  |  |  +-Next
+02115  |  +-EndIf
+02116  |    ; All done. Repaint the listview controls, clear the array, and free the handles.
+02117  |    _GUICtrlListView_EndUpdate($hSrcHandle)
+02118  |    _GUICtrlListView_EndUpdate($hTargHandle)
+02119  |    $aSelectedIndices = 0
+02120  |    $hSrcHandle = 0
+02121  |    $hTargHandle = 0
+02122  |    Return
+02123  +-EndFunc   ;==>_ButtonRemoveLibClick
+02124    
+02125    ; #FUNCTION# ====================================================================================================================
+02126    ; Name...........: _ButtonCancelClick
+02127    ; Description ...: Handler for the "cancel and close" button click event. This discards any and all changes, destroys the GUI and
+02128    ;                  terminates the application.
+02129    ; Syntax.........: _ButtonCancelClick()
+02130    ; Parameters ....: None.
+02131    ; Return values .: None.
+02132    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02133    ; Modified.......:
+02134    ; Remarks .......:
+02135    ; Related .......:
+02136    ; Link ..........;
+02137    ; Example .......;
+02138    ; ===============================================================================================================================
+02139  +-Func _ButtonCancelClick()
+02140  |    _OnFormMainClose()
+02141  +-EndFunc   ;==>_ButtonCancelClick
+02142    
+02143    ; #FUNCTION# ====================================================================================================================
+02144    ; Name...........: _ButtonCreateClick
+02145    ; Description ...: Handler for the create/save project button click event. This is where most of the real work is done.
+02146    ;                  This creates or saves the defined project and then loads the main script file of the project in the SciTE editor.
+02147    ; Syntax.........: _ButtonCreateClick()
+02148    ; Parameters ....: None.
+02149    ; Return values .: None.
+02150    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02151    ; Modified.......: 01/31/2011
+02152    ; Remarks .......:
+02153    ; Related .......:
+02154    ; Link ..........;
+02155    ; Example .......;
+02156    ; ===============================================================================================================================
+02157  +-Func _ButtonCreateClick()
+02158  |    ConsoleWrite($MY_NAME & ": Creating/saving project..." & @CRLF)
+02159  |    ; Do we have a project name?
+02160  |    Local $sProjName = GUICtrlRead($InputProjName)
+02161  |  +-If (StringLen($sProjName) == 0) Then
+02162  |  |    MsgBox(48, $MY_NAME, "You must provide a name for your project.")
+02163  |  |    GUICtrlSetState($InputProjName, $GUI_FOCUS)
+02164  |  |    Return
+02165  |  +-EndIf
+02166  |    
+02167  |    ; Do we have the project's parent location?
+02168  |    Local $sProjectParent = GUICtrlRead($InputLocation)
+02169  |  +-If (StringLen($sProjectParent) == 0) Then
+02170  |  |    MsgBox(48, $MY_NAME, "You must specify the parent directory of your project.")
+02171  |  |    GUICtrlSetState($InputLocation, $GUI_FOCUS)
+02172  |  |    Return
+02173  |  +-EndIf
+02174  |    
+02175  |    ; Fixup the path.
+02176  |    Local $sProjectHome = GUICtrlRead($InputFullPath)
+02177  |  +-If (StringRight($sProjectHome, 1) <> "\") Then
+02178  |  |    $sProjectHome &= "\"
+02179  |  +-EndIf
+02180  |    
+02181  |    ; Do we have the name of the main script file?
+02182  |    Local $sMainScript = GUICtrlRead($InputMainScript)
+02183  |  +-If (StringLen($sMainScript) == 0) Then
+02184  |  |    MsgBox(48, $MY_NAME, "You must provide a name for the main script in your project.")
+02185  |  |    GUICtrlSetState($InputMainScript, $GUI_FOCUS)
+02186  |  |    Return
+02187  |  +-EndIf
+02188  |    
+02189  |    ; Fixup the file name.
+02190  |  +-If (_FileExtension($sMainScript) <> "au3") Then
+02191  |  |    $sMainScript &= ".au3"
+02192  |  +-EndIf
+02193  |    
+02194  |    ; Build the full paths to the project file and the main script file.
+02195  |    Local $sScriptPath = $sProjectHome & $sMainScript
+02196  |    ConsoleWrite($MY_NAME & ": Script path: " & $sScriptPath & @CRLF)
+02197  |    Local $sProjectFilePath = $sProjectHome & $sProjName & "." & $PROJECT_FILE_EXT
+02198  |    ConsoleWrite($MY_NAME & ": Project file: " & $sProjectFilePath & @CRLF)
+02199  |    
+02200  |    ; Determine if we are creating a project, or updating one.
+02201  |  +-If (StringInStr(GUICtrlRead($ButtonCreate), "create") > 0) Then
+02202  |  |    ; We are creating a project.  See if the folder for the specified project already exists.
+02203  |  |  +-If (FileExists($sProjectHome)) Then
+02204  |  |  |  +-If (MsgBox(4 + 32, $MY_NAME, "The specified project directory already exists. Are you sure you want to use it?") == 7) Then
+02205  |  |  |  |    GUICtrlSetState($InputProjName, $GUI_FOCUS)
+02206  |  |  |  |    Return
+02207  |  |  |  +-EndIf
+02208  |  |  +-EndIf
+02209  |  |    
+02210  |  |    ; See if an existing project file exists.  If so, ask the user if we can overwrite it.
+02211  |  |    ; By "overwrite", what we really mean is that we'll delete it now, then generate a new
+02212  |  |    ; project file a little bit later.
+02213  |  |  +-If (FileExists($sProjectFilePath)) Then
+02214  |  |  |  +-If (MsgBox(4 + 32, $MY_NAME, "The specified project already exists.  Overwrite?" & _
+02215  |  |  |  |       		@CRLF & @CRLF & "This operation cannot be undone.") == 6) Then
+02216  |  |  |  |    FileDelete($sProjectFilePath)
+02217  |  |  |  +-Else
+02218  |  |  |  |    GUICtrlSetState($InputProjName, $GUI_FOCUS)
+02219  |  |  |  |    Return
+02220  |  |  |  +-EndIf
+02221  |  |  +-EndIf
+02222  |  +-EndIf
+02223  |    
+02224  |    ; Create the project folder if it doesn't already exist.
+02225  |  +-If (Not _FileIsDir($sProjectHome)) Then
+02226  |  |  +-If (DirCreate($sProjectHome) == 0) Then
+02227  |  |  |    MsgBox(16, $MY_NAME, "Failed to create project folder:" & @CRLF & $sProjectHome)
+02228  |  |  |    GUICtrlSetState($InputLocation, $GUI_FOCUS)
+02229  |  |  |    Return
+02230  |  |  +-EndIf
+02231  |  +-EndIf
+02232  |    
+02233  |    ; If the "create/use configuration" checkbox is checked, then make sure the config file name has been specified.
+02234  |    Local $iHasConfig = False
+02235  |    Local $sConfigFile = ""
+02236  |  +-If (GUICtrlRead($CheckboxUseConfig) == $GUI_CHECKED) Then
+02237  |  |    $sConfigFile = GUICtrlRead($InputConfigName)
+02238  |  |  +-If (StringLen($sConfigFile) == 0) Then
+02239  |  |  |    MsgBox(48, $MY_NAME, "You must provide a name for the configuration file.")
+02240  |  |  |    GUICtrlSetState($InputConfigName, $GUI_FOCUS)
+02241  |  |  |    Return
+02242  |  |  +-Else
+02243  |  |  |    ; Make sure the file name has the correct extension. If not, append the default.
+02244  |  |  |    Local $sExtension = _FileExtension($sConfigFile)
+02245  |  |  |  +-If (($sExtension <> "ini") And ($sExtension <> "cgf") And ($sExtension <> "config") And ($sExtension <> "dat")) Then
+02246  |  |  |  |    $sConfigFile &= ".ini"
+02247  |  |  |  +-EndIf
+02248  |  |  |    ; Build the full path.
+02249  |  |  |    $sConfigFile = $sProjectHome & $sConfigFile
+02250  |  |  |    ConsoleWrite($MY_NAME & ": Config file: " & $sConfigFile & @CRLF)
+02251  |  |  |    $iHasConfig = True
+02252  |  |  +-EndIf
+02253  |  +-EndIf
+02254  |    
+02255  |    ; Initialize the project info array structure.
+02256  |    Local $aProjectInfo = _ProjectInfoArrayInit()
+02257  |    $aProjectInfo[4] = $sProjName
+02258  |    
+02259  |    ; Build an array of target references from the listview.
+02260  |    Local $aReferences = _GetReferences()
+02261  |    
+02262  |    Local $aDirs[4]
+02263  |    Local $nDirNum = 0
+02264  |    Local $sErrMsg = ""
+02265  |    Local $sLibDir = ""
+02266  |    ; Is this going to be an application script or a library?
+02267  |  +-If (GUICtrlRead($RadioApp) == $GUI_CHECKED) Then
+02268  |  |    ; We're creating an application script project.
+02269  |  |    ConsoleWrite($MY_NAME & ": Project type: application script." & @CRLF)
+02270  |  |    ; Get the AutoIt version and script version.
+02271  |  |    $aProjectInfo[1] = StringStripWS(GUICtrlRead($InputAutoItVer), 8)
+02272  |  |    $aProjectInfo[3] = StringStripWS(GUICtrlRead($InputScriptVer), 8)
+02273  |  |    ; Get the created and modified dates.
+02274  |  |    Local $aCreatedMonth = _GUICtrlDTP_GetSystemTime(GUICtrlGetHandle($DateCreated))
+02275  |  |    Local $aModifiedMonth = _GUICtrlDTP_GetSystemTime(GUICtrlGetHandle($DateModified))
+02276  |  |    $aProjectInfo[5] = $aCreatedMonth[0] & "/" & $aCreatedMonth[1] & "/" & $aCreatedMonth[2]
+02277  |  |    $aProjectInfo[6] = $aModifiedMonth[0] & "/" & $aModifiedMonth[1] & "/" & $aModifiedMonth[2]
+02278  |  |    $aCreatedMonth = 0
+02279  |  |    $aModifiedMonth = 0
+02280  |  |    ; Get the company and copyright.
+02281  |  |    $aProjectInfo[7] = GUICtrlRead($InputCompany)
+02282  |  |    $aProjectInfo[8] = GUICtrlRead($InputCopyright)
+02283  |  |    
+02284  |  |    ; This application has/will have a GUI.
+02285  |  |    Local $iHasGui = False
+02286  |  |  +-If (GUICtrlRead($CheckboxHasGui) == $GUI_CHECKED) Then
+02287  |  |  |    $iHasGui = True
+02288  |  |  +-EndIf
+02289  |  |    
+02290  |  |    ; This application requires/will require administrative privileges.
+02291  |  |    Local $iRequireAdmin = False
+02292  |  |  +-If (GUICtrlRead($CheckboxRequireAdmin) == $GUI_CHECKED) Then
+02293  |  |  |    $iRequireAdmin = True
+02294  |  |  +-EndIf
+02295  |  |    
+02296  |  |    ; Create the configuration file and check for errors. Continue if an error occurs.
+02297  |  |  +-If (($iHasConfig) And (StringLen($sConfigFile) > 0)) Then
+02298  |  |  |    _CreateApplicationConfig($sConfigFile, $aProjectInfo)
+02299  |  |  |  +-If (@error) Then
+02300  |  |  |  |    Local $nError = @error
+02301  |  |  |  |    $sErrMsg = _GetAppConfigGenerationResult($nError)
+02302  |  |  |  |  +-If ($nError == 2) Then
+02303  |  |  |  |  |    $sErrMsg &= " Skipping..."
+02304  |  |  |  |  +-EndIf
+02305  |  |  |  |    
+02306  |  |  |  |    ConsoleWrite($MY_NAME & ": " & $sErrMsg & @CRLF)
+02307  |  |  |  |  +-If ($nError <> 2) Then
+02308  |  |  |  |  |    MsgBox(48, $MY_NAME, "Could not generate application config file:" & @CRLF & $sErrMsg)
+02309  |  |  |  |  +-EndIf
+02310  |  |  |  +-EndIf
+02311  |  |  +-EndIf
+02312  |  |    
+02313  |  |    ; Create/save project file and check for errors. Stop if an error occurs.
+02314  |  |    _WriteProjectFile($sProjectFilePath, $aProjectInfo, $aReferences, $iHasGui, $iRequireAdmin, False, _FileGetFileName($sConfigFile))
+02315  |  |  +-If (@error) Then
+02316  |  |  |    $sErrMsg = _GetProjectGenerationResult(@error)
+02317  |  |  |    ConsoleWrite($MY_NAME & ": " & $sErrMsg & @CRLF)
+02318  |  |  |    MsgBox(16, $MY_NAME, "Failed to save/create project:" & @CRLF & $sErrMsg)
+02319  |  |  |    Return
+02320  |  |  +-EndIf
+02321  |  |    
+02322  |  |    ; Generate/modify the script and check for errors. Stop if an error occurs.
+02323  |  |    _GenerateScript($sScriptPath, $aProjectInfo, $aReferences, $iHasGui, $iRequireAdmin, False, _FileGetFileName($sConfigFile))
+02324  |  |  +-If (@error) Then
+02325  |  |  |    $sErrMsg = _GetScriptGenerationResult(@error)
+02326  |  |  |    ConsoleWrite($MY_NAME & ": " & $sErrMsg & @CRLF)
+02327  |  |  |    MsgBox(16, $MY_NAME, "Failed to generate/modify script:" & @CRLF & $sErrMsg)
+02328  |  |  |    Return
+02329  |  |  +-EndIf
+02330  |  |    
+02331  |  |    ; Create additional child directories (lib, installer, backup).
+02332  |  |    $aDirs[0] = 3
+02333  |  |    $aDirs[1] = $sProjectHome & "lib"
+02334  |  |    $aDirs[2] = $sProjectHome & "installer"
+02335  |  |    $aDirs[3] = $sProjectHome & "Backup"
+02336  |  |  +-For $nDirNum = 1 To $aDirs[0]
+02337  |  |  |  +-If (Not _FileIsDir($aDirs[$nDirNum])) Then
+02338  |  |  |  |    DirCreate($aDirs[$nDirNum])
+02339  |  |  |  +-EndIf
+02340  |  |  +-Next
+02341  |  |    $sLibDir = $aDirs[1]
+02342  |  |    $aDirs = 0
+02343  |  +-Else
+02344  |  |    ; We're creating a library script.
+02345  |  |    ConsoleWrite($MY_NAME & ": Project type: library script." & @CRLF)
+02346  |  |    ; Create/save project file and check for errors. Stop if an error occurs.
+02347  |  |    _WriteProjectFile($sProjectFilePath, $aProjectInfo, $aReferences, False, False, True)
+02348  |  |  +-If (@error) Then
+02349  |  |  |    $sErrMsg = _GetProjectGenerationResult(@error)
+02350  |  |  |    ConsoleWrite($MY_NAME & ": " & $sErrMsg & @CRLF)
+02351  |  |  |    MsgBox(16, $MY_NAME, "Failed to save/create project:" & @CRLF & $sErrMsg)
+02352  |  |  |    Return
+02353  |  |  +-EndIf
+02354  |  |    
+02355  |  |    ; Generate/modify the script and check for errors. Stop if an error occurs.
+02356  |  |    _GenerateScript($sScriptPath, $aProjectInfo, $aReferences, False, False, True)
+02357  |  |  +-If (@error) Then
+02358  |  |  |    $sErrMsg = _GetScriptGenerationResult(@error)
+02359  |  |  |    ConsoleWrite($MY_NAME & ": " & $sErrMsg & @CRLF)
+02360  |  |  |    MsgBox(16, $MY_NAME, "Failed to generate/modify script:" & @CRLF & $sErrMsg)
+02361  |  |  |    Return
+02362  |  |  +-EndIf
+02363  |  |    
+02364  |  |    ; Create additional child directories (lib, help).
+02365  |  |    ReDim $aDirs[3]
+02366  |  |    $aDirs[0] = 2
+02367  |  |    $aDirs[1] = $sProjectHome & "help"
+02368  |  |    $aDirs[2] = $sProjectHome & "lib"
+02369  |  |  +-For $nDirNum = 1 To $aDirs[0]
+02370  |  |  |  +-If (Not _FileIsDir($aDirs[$nDirNum])) Then
+02371  |  |  |  |    DirCreate($aDirs[$nDirNum])
+02372  |  |  |  +-EndIf
+02373  |  |  +-Next
+02374  |  |    $sLibDir = $aDirs[2]
+02375  |  |    $aDirs = 0
+02376  |  +-EndIf
+02377  |    
+02378  |    ; Create distribution child directory.
+02379  |    Local $sDistDir = $sProjectHome & "dist"
+02380  |  +-If (Not _FileIsDir($sDistDir)) Then
+02381  |  |    DirCreate($sDistDir)
+02382  |  +-EndIf
+02383  |    
+02384  |    ; Copy any non-standard includes.
+02385  |  +-If (StringLen($sLibDir) > 0) Then
+02386  |  |    ; Get the copy include policy.
+02387  |  |    Local $policy = $CP_IFNEWER
+02388  |  |    Local $sCopyMode = StringLower(GUICtrlRead($ComboCopyPolicy))
+02389  |  |  +-If ((StringInStr($sCopyMode, "always") > 0) Or (StringInStr($sCopyMode, "overwrite") > 0)) Then
+02390  |  |  |    $policy = $CP_ALWAYS
+02391  |  |  +-ElseIf (StringInStr($sCopyMode, "exist") > 0) Then
+02392  |  |  |    $policy = $CP_IFNOTEXIST
+02393  |  |  +-EndIf
+02394  |  |    
+02395  |  |    ; Copy the includes (if needed).
+02396  |  |    _CopyLibs($aReferences, $sLibDir, $policy)
+02397  |  |  +-If (@error) Then
+02398  |  |  |    ConsoleWrite($MY_NAME & ": Failed to copy file: '" & $aReferences[@extended] & "' to '" & $sLibDir & "'" & @CRLF)
+02399  |  |  |    MsgBox(16, $MY_NAME, "Failed to copy one or more non-standard includes to your project.")
+02400  |  |  +-EndIf
+02401  |  +-EndIf
+02402  |    
+02403  |    ; Open the created/modified script in SciTE.
+02404  |    ConsoleWrite($MY_NAME & ": Project created/updated. Opening script in editor..." & @CRLF)
+02405  |    _EditScript($sScriptPath)
+02406  |  +-If (@error) Then
+02407  |  |    $sErrMsg = _GetScriptEditResult(@error)
+02408  |  |    ConsoleWrite($MY_NAME & ": Could not open script: " & $sErrMsg & @CRLF)
+02409  |  |    MsgBox(16, $MY_NAME, "Failed to open script:" & @CRLF & $sErrMsg)
+02410  |  +-EndIf
+02411  |    
+02412  |    ; All done. Close the application.
+02413  |    $aProjectInfo = 0
+02414  |    $aReferences = 0
+02415  |    _OnFormMainClose()
+02416  +-EndFunc   ;==>_ButtonCreateClick
+02417    
+02418    ; #FUNCTION# ====================================================================================================================
+02419    ; Name...........: _CheckboxMakeDefaultClick
+02420    ; Description ...: Handler for the "this directory is the default for all projects" checkbox click event. This will enable or
+02421    ;                  disable the project parent location InputTextbox and browse button based on checkbox state.
+02422    ; Syntax.........: _CheckboxMakeDefaultClick()
+02423    ; Parameters ....: None.
+02424    ; Return values .: None.
+02425    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02426    ; Modified.......: 1/31/2011
+02427    ; Remarks .......:
+02428    ; Related .......:
+02429    ; Link ..........;
+02430    ; Example .......;
+02431    ; ===============================================================================================================================
+02432  +-Func _CheckboxMakeDefaultClick()
+02433  |  +-If (GUICtrlRead($CheckboxMakeDefault) == $GUI_CHECKED) Then
+02434  |  |  +-If (StringLen(GUICtrlRead($InputLocation)) > 0) Then
+02435  |  |  |    GUICtrlSetState($InputLocation, $GUI_DISABLE)
+02436  |  |  |    GUICtrlSetState($ButtonProjectBrowse, $GUI_DISABLE)
+02437  |  |  +-Else
+02438  |  |  |    MsgBox(48, $MY_NAME, "No parent project directory specified.")
+02439  |  |  |    GUICtrlSetState($CheckboxMakeDefault, $GUI_UNCHECKED)
+02440  |  |  +-EndIf
+02441  |  +-Else
+02442  |  |    GUICtrlSetState($InputLocation, $GUI_ENABLE)
+02443  |  |    GUICtrlSetState($ButtonProjectBrowse, $GUI_ENABLE)
+02444  |  +-EndIf
+02445  |    Return
+02446  +-EndFunc   ;==>_CheckboxMakeDefaultClick
+02447    
+02448    ; #FUNCTION# ====================================================================================================================
+02449    ; Name...........: _InputProjNameChange
+02450    ; Description ...: Handler for the "project name" InputTextbox change event. Whenever the text in the "project name" InputTextbox
+02451    ;                  control changes, the main script name and full project path are re-validated and their respective InputTextbox
+02452    ;                  controls are repopulated with current data.
+02453    ; Syntax.........: _InputProjNameChange()
+02454    ; Parameters ....: None.
+02455    ; Return values .: None.
+02456    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02457    ; Modified.......:
+02458    ; Remarks .......:
+02459    ; Related .......:
+02460    ; Link ..........;
+02461    ; Example .......;
+02462    ; ===============================================================================================================================
+02463  +-Func _InputProjNameChange()
+02464  |    GUICtrlSetData($InputMainScript, GUICtrlRead($InputProjName) & ".au3")
+02465  |    Local $sProjectsDir = GUICtrlRead($InputLocation)
+02466  |  +-If (StringLen($sProjectsDir) > 0) Then
+02467  |  |  +-If (StringRight($sProjectsDir, 1) <> "\") Then
+02468  |  |  |    $sProjectsDir &= "\"
+02469  |  |  +-EndIf
+02470  |  |    GUICtrlSetData($InputFullPath, $sProjectsDir & GUICtrlRead($InputProjName))
+02471  |  +-EndIf
+02472  |    Return
+02473  +-EndFunc   ;==>_InputProjNameChange
+02474    
+02475    ; #FUNCTION# ====================================================================================================================
+02476    ; Name...........: _InputLocationChange
+02477    ; Description ...: Handler for the "project parent location" InputTextbox change event. This re-validates the project full path
+02478    ;                  whenever the project parent location path changes.
+02479    ; Syntax.........: _InputLocationChange()
+02480    ; Parameters ....: None.
+02481    ; Return values .: None.
+02482    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02483    ; Modified.......:
+02484    ; Remarks .......:
+02485    ; Related .......:
+02486    ; Link ..........;
+02487    ; Example .......;
+02488    ; ===============================================================================================================================
+02489  +-Func _InputLocationChange()
+02490  |    Local $sProjectsDir = GUICtrlRead($InputLocation)
+02491  |    Local $sMainScriptName = GUICtrlRead($InputMainScript)
+02492  |    Local $sProjectName = GUICtrlRead($InputProjName)
+02493  |  +-If (StringLen($sMainScriptName) == 0) Then
+02494  |  |  +-If (StringLen($sProjectName) > 0) Then
+02495  |  |  |    $sMainScriptName = $sProjectName & ".au3"
+02496  |  |  |    GUICtrlSetData($InputMainScript, $sMainScriptName)
+02497  |  |  +-EndIf
+02498  |  +-EndIf
+02499  |    
+02500  |  +-If ((StringLen($sProjectsDir) > 0) And (StringLen($sMainScriptName) > 0)) Then
+02501  |  |  +-If (StringRight($sProjectsDir, 1) <> "\") Then
+02502  |  |  |    $sProjectsDir &= "\"
+02503  |  |  +-EndIf
+02504  |  |    GUICtrlSetData($InputFullPath, $sProjectsDir & $sProjectName & "\")
+02505  |  +-EndIf
+02506  |    Return
+02507  +-EndFunc   ;==>_InputLocationChange
+02508    
+02509    ; #FUNCTION# ====================================================================================================================
+02510    ; Name...........: _OnFormMainClose
+02511    ; Description ...: Handler for the main form close event. This saves the global configuration settings, destroys the GUI and
+02512    ;                  terminates the application.
+02513    ; Syntax.........: _OnFormMainClose()
+02514    ; Parameters ....: None.
+02515    ; Return values .: None.
+02516    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02517    ; Modified.......:
+02518    ; Remarks .......:
+02519    ; Related .......:
+02520    ; Link ..........;
+02521    ; Example .......;
+02522    ; ===============================================================================================================================
+02523  +-Func _OnFormMainClose()
+02524  |    GUIRegisterMsg($WM_NOTIFY, "")
+02525  |    _SaveGlobalConfig()
+02526  |    _ClearSourceLibs()
+02527  |    _ClearTargetLibs()
+02528  |  +-If (IsHWnd($FormMain)) Then
+02529  |  |    GUIDelete($FormMain)
+02530  |  +-EndIf
+02531  |    Exit
+02532  +-EndFunc   ;==>_OnFormMainClose
+02533    
+02534    ; #FUNCTION# ====================================================================================================================
+02535    ; Name...........: _RadioAppClick
+02536    ; Description ...: Handler for the "Application" radio button click event. This enables all the controls associated with an
+02537    ;                  application type of script.
+02538    ; Syntax.........: _RadioAppClick()
+02539    ; Parameters ....: None.
+02540    ; Return values .: None.
+02541    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02542    ; Modified.......: 01/04/2011
+02543    ; Remarks .......:
+02544    ; Related .......:
+02545    ; Link ..........;
+02546    ; Example .......;
+02547    ; ===============================================================================================================================
+02548  +-Func _RadioAppClick()
+02549  |    GUICtrlSetState($InputAutoItVer, $GUI_ENABLE)
+02550  |    GUICtrlSetState($InputScriptVer, $GUI_ENABLE)
+02551  |    GUICtrlSetState($DateCreated, $GUI_ENABLE)
+02552  |    GUICtrlSetState($DateModified, $GUI_ENABLE)
+02553  |    GUICtrlSetState($InputCompany, $GUI_ENABLE)
+02554  |    GUICtrlSetState($InputCopyright, $GUI_ENABLE)
+02555  |    GUICtrlSetState($CheckboxRequireAdmin, $GUI_ENABLE)
+02556  |    GUICtrlSetState($CheckboxHasGui, $GUI_ENABLE)
+02557  |    GUICtrlSetState($CheckboxUseConfig, $GUI_ENABLE)
+02558  |    Return
+02559  +-EndFunc   ;==>_RadioAppClick
+02560    
+02561    ; #FUNCTION# ====================================================================================================================
+02562    ; Name...........: _RadioLibClick
+02563    ; Description ...: Handler for the "Library" radio button click event.  This disables all the controls associated with an
+02564    ;                  application type of script, which are unnecessary for library scripts.
+02565    ; Syntax.........: _RadioLibClick()
+02566    ; Parameters ....: None.
+02567    ; Return values .: None.
+02568    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02569    ; Modified.......: 01/05/2011
+02570    ; Remarks .......:
+02571    ; Related .......:
+02572    ; Link ..........;
+02573    ; Example .......;
+02574    ; ===============================================================================================================================
+02575  +-Func _RadioLibClick()
+02576  |    GUICtrlSetState($InputAutoItVer, $GUI_DISABLE)
+02577  |    GUICtrlSetState($InputScriptVer, $GUI_DISABLE)
+02578  |    GUICtrlSetState($DateCreated, $GUI_DISABLE)
+02579  |    GUICtrlSetState($DateModified, $GUI_DISABLE)
+02580  |    GUICtrlSetState($InputCompany, $GUI_DISABLE)
+02581  |    GUICtrlSetState($InputCopyright, $GUI_DISABLE)
+02582  |    GUICtrlSetState($CheckboxRequireAdmin, $GUI_UNCHECKED + $GUI_DISABLE)
+02583  |    GUICtrlSetState($CheckboxHasGui, $GUI_DISABLE)
+02584  |    GUICtrlSetState($CheckboxUseConfig, $GUI_DISABLE)
+02585  |  +-If (GUICtrlRead($CheckboxUseConfig) == $GUI_CHECKED) Then
+02586  |  |    GUICtrlSetData($InputConfigName, "")
+02587  |  |    GUICtrlSetState($InputConfigName, $GUI_DISABLE)
+02588  |  |    GUICtrlSetState($CheckboxUseConfig, $GUI_UNCHECKED + $GUI_DISABLE)
+02589  |  +-EndIf
+02590  |    Return
+02591  +-EndFunc   ;==>_RadioLibClick
+02592    
+02593    ; #FUNCTION# ====================================================================================================================
+02594    ; Name...........: _ButtonOpenProjClick
+02595    ; Description ...: Handler for the "open project" button click event. This presents the user with a dialog to load a project file.
+02596    ; Syntax.........: _ButtonOpenProjClick()
+02597    ; Parameters ....: None.
+02598    ; Return values .: None.
+02599    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02600    ; Modified.......: 02/08/2011
+02601    ; Remarks .......:
+02602    ; Related .......:
+02603    ; Link ..........;
+02604    ; Example .......;
+02605    ; ===============================================================================================================================
+02606  +-Func _ButtonOpenProjClick()
+02607  |    ; Try to get the starting point from the $InputLocation field. If the user has not input anything yet
+02608  |    ; or the control has not yet been created (script called with /opendlg), then try to get our starting
+02609  |    ; path from the config file.
+02610  |    Local $sStartDir = GUICtrlRead($InputLocation)
+02611  |  +-If (Not _FileIsDir($sStartDir)) Then
+02612  |  |  +-If (FileExists($CONFIG)) Then
+02613  |  |  |    Local $sProjDir = IniRead($CONFIG, "Main", "ProjectsDir", "")
+02614  |  |  |  +-If (_FileIsDir($sProjDir)) Then
+02615  |  |  |  |    $sStartDir = $sProjDir
+02616  |  |  |  |    $sProjDir = ""
+02617  |  |  |  +-EndIf
+02618  |  |  +-EndIf
+02619  |  |    
+02620  |  |    ; We fall back to the user's "My Documents" dir if all else fails.
+02621  |  |  +-If (StringLen($sStartDir) == 0) Then
+02622  |  |  |    $sStartDir = @MyDocumentsDir
+02623  |  |  +-EndIf
+02624  |  +-EndIf
+02625  |    
+02626  |    Local $sProject = FileOpenDialog("Open AutoItV3 Project", $sStartDir, "AutoIt Projects (*." & $PROJECT_FILE_EXT & ")", 1 + 2, "", $FormMain)
+02627  |  +-If ((Not @error) And (StringLen($sProject) > 0)) Then
+02628  |  |  +-If (FileExists($sProject)) Then
+02629  |  |  |    _ResetForm()
+02630  |  |  |    ConsoleWrite($MY_NAME & ": Loading project file: " & $sProject & @CRLF)
+02631  |  |  |  +-If (_LoadProject($sProject)) Then
+02632  |  |  |  |    $iWasLoaded = True
+02633  |  |  |  |    $projectFile = $sProject
+02634  |  |  |  |    $sProject = ""
+02635  |  |  |  |    GUICtrlSetData($ButtonCreate, "Save and Load")
+02636  |  |  |  +-EndIf
+02637  |  |  +-EndIf
+02638  |  +-Else
+02639  |  |    ; If this handler was called as a result of the "/opendlg" switch being present on the command line
+02640  |  |    ; but the user then subsequently canceled the open project dialog, then we terminate here.
+02641  |  |  +-If ($iOpenFromCmdLine) Then
+02642  |  |  |    Exit
+02643  |  |  +-EndIf
+02644  |  +-EndIf
+02645  |    Return
+02646  +-EndFunc   ;==>_ButtonOpenProjClick
+02647    
+02648    ; #FUNCTION# ====================================================================================================================
+02649    ; Name...........: _CheckboxUseConfigClick
+02650    ; Description ...: Handler for the "create/use configuration file" checkbox click event. Enables/disables the config file name
+02651    ;                  inputbox control based on checkbox state. If checked, this will also append an acceptable file extension if
+02652    ;                  it does not already have one.
+02653    ; Syntax.........: _CheckboxUseConfigClick()
+02654    ; Parameters ....: None.
+02655    ; Return values .: None.
+02656    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02657    ; Modified.......:
+02658    ; Remarks .......:
+02659    ; Related .......:
+02660    ; Link ..........;
+02661    ; Example .......;
+02662    ; ===============================================================================================================================
+02663  +-Func _CheckboxUseConfigClick()
+02664  |  +-If (GUICtrlRead($CheckboxUseConfig) == $GUI_CHECKED) Then
+02665  |  |    GUICtrlSetState($InputConfigName, $GUI_ENABLE)
+02666  |  |    Local $sConfigName = GUICtrlRead($InputConfigName)
+02667  |  |  +-If (StringLen($sConfigName) == 0) Then
+02668  |  |  |    $sConfigName = GUICtrlRead($InputProjName)
+02669  |  |  +-EndIf
+02670  |  |  +-If (StringLen($sConfigName) > 0) Then
+02671  |  |  |    Local $sExtension = _FileExtension($sConfigName)
+02672  |  |  |  +-If (($sExtension <> "ini") And ($sExtension <> "cfg") And ($sExtension <> "config") And ($sExtension <> "dat")) Then
+02673  |  |  |  |    $sConfigName &= ".ini"
+02674  |  |  |  +-EndIf
+02675  |  |  |    GUICtrlSetData($InputConfigName, $sConfigName)
+02676  |  |  +-EndIf
+02677  |  +-Else
+02678  |  |    GUICtrlSetState($InputConfigName, $GUI_DISABLE)
+02679  |  +-EndIf
+02680  |    Return
+02681  +-EndFunc   ;==>_CheckboxUseConfigClick
+02682    
+02683    ; #FUNCTION# ====================================================================================================================
+02684    ; Name...........: _ButtonCurrDateNowClick
+02685    ; Description ...: Handler for the "Now" button click event on the "Date" field in the "Details" tab. Sets the date field to the
+02686    ;                  current date of the host system.
+02687    ; Syntax.........: _ButtonCurrDateNowClick()
+02688    ; Parameters ....: None.
+02689    ; Return values .: None.
+02690    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02691    ; Modified.......:
+02692    ; Remarks .......:
+02693    ; Related .......:
+02694    ; Link ..........;
+02695    ; Example .......;
+02696    ; ===============================================================================================================================
+02697  +-Func _ButtonCurrDateNowClick()
+02698  |    GUICtrlSetData($DateCreated, _NowCalcDate())
+02699  |    Return
+02700  +-EndFunc   ;==>_ButtonCurrDateNowClick
+02701    
+02702    ; #FUNCTION# ====================================================================================================================
+02703    ; Name...........: _ButtonModDateNowClick
+02704    ; Description ...: Handler for the "Now" button click event on the "Modified" field in the "Details" tab. Sets the date field to
+02705    ;                  the current date of the host system.
+02706    ; Syntax.........: _ButtonModDateNowClick()
+02707    ; Parameters ....: None.
+02708    ; Return values .: None.
+02709    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02710    ; Modified.......:
+02711    ; Remarks .......:
+02712    ; Related .......:
+02713    ; Link ..........;
+02714    ; Example .......;
+02715    ; ===============================================================================================================================
+02716  +-Func _ButtonModDateNowClick()
+02717  |    GUICtrlSetData($DateModified, _NowCalcDate())
+02718  |    Return
+02719  +-EndFunc   ;==>_ButtonModDateNowClick
+02720    
+02721    ; #FUNCTION# ====================================================================================================================
+02722    ; Name...........: _WM_Notify_Events
+02723    ; Description ...: Handler for WM_NOTIFY events.  Currently, this function handles the double-click events for both ListView
+02724    ;                  controls in the "References" tab.
+02725    ; Syntax.........: _WM_Notify_Events($hWndGUI, $MsgID, $wParam, $lParam)
+02726    ; Parameters ....: $hWndGUI -
+02727    ;                  $MsgID   -
+02728    ;                  $wParam  -
+02729    ;                  $lParam  -
+02730    ; Return values .: None.
+02731    ; Author ........: Cyrus <cyrusbuilt at gmail dot com>
+02732    ; Modified.......:
+02733    ; Remarks .......:
+02734    ; Related .......:
+02735    ; Link ..........;
+02736    ; Example .......;
+02737    ; ===============================================================================================================================
+02738  +-Func _WM_Notify_Events($hWndGUI, $MsgID, $wParam, $lParam)
+02739  |    #forceref $hWndGUI, $MsgID, $wParam
+02740  |    ConsoleWrite("Event fired" & @CRLF)
+02741  |    Local $tagNMLISTVIEW, $event, $hwndFrom, $code
+02742  |    $tagNMLISTVIEW = DllStructCreate("int;int;int", $lParam)
+02743  |    If @error Then Return
+02744  |    $event = DllStructGetData($tagNMLISTVIEW, 3)
+02745  |    ; CB_TODO - FIXME:
+02746  |    ; According to WindowConstants.au3, the event ID we want to intercept is: -3
+02747  |    ; All the events being received are positive integer values on my 64bit Win7 dev box, but not
+02748  |    ; on my 32bit Win7 dev box...... WTF?
+02749  |    ConsoleWrite("Event: " & $event & @CRLF)
+02750  |  +-Switch $wParam
+02751  |  |  +-Case $ListViewSourceLibs
+02752  |  |  |  +-Switch $event
+02753  |  |  |  |  +-Case $NM_DBLCLK
+02754  |  |  |  |  |    _ButtonAddLibClick()
+02755  |  |  |  +-EndSwitch
+02756  |  |  +-Case $ListViewTargetLibs
+02757  |  |  |  +-Switch $event
+02758  |  |  |  |  +-Case $NM_DBLCLK
+02759  |  |  |  |  |    _ButtonRemoveLibClick()
+02760  |  |  |  +-EndSwitch
+02761  |  +-EndSwitch
+02762  |    $tagNMLISTVIEW = 0
+02763  |    $event = 0
+02764  |    $lParam = 0
+02765  +-EndFunc   ;==>_WM_Notify_Events
+02766    #EndRegion Event Handlers
+02767    
+02768    
+02769    #Region Main Script
+02770    ; *********************** MAIN ENTRY POINT ****************************
+02771    Opt("GUIOnEventMode", 1)
+02772  +-If (@Compiled) Then
+02773  |    Opt("TrayMenuMode", 1)
+02774  |    Opt("TrayIconHide", 1)
+02775  +-EndIf
+02776    
+02777    ; Check script args for a valid project file. If not found or not valid, check to see if the
+02778    ; open dialog switch was provided.
+02779    ConsoleWrite($MY_NAME & ": Processing cmdline args..." & @CRLF)
+02780    Dim $i = 0
+02781  +-If ($CmdLine[0] > 0) Then
+02782  |  +-For $i = 1 To $CmdLine[0]
+02783  |  |  +-If (FileExists($CmdLine[$i])) Then
+02784  |  |  |    $projectFile = _PathFull($CmdLine[$i])
+02785  |  |  |  +-If (StringLower(_FileExtension($projectFile)) <> $PROJECT_FILE_EXT) Then
+02786  |  |  |  |    ConsoleWrite($MY_NAME & ": Invalid project file: " & $projectFile & @CRLF)
+02787  |  |  |  |    MsgBox(16, $MY_NAME, "The specified file is not a valid " & $MY_NAME & " project file.")
+02788  |  |  |  |    $projectFile = ""
+02789  |  |  |  +-EndIf
+02790  |  v--|----ExitLoop
+02791  |  |  +-EndIf
+02792  |  |    
+02793  |  |  +-If (StringLower($CmdLine[$i]) == "/opendlg") Then
+02794  |  |  |    $iOpenFromCmdLine = True
+02795  |  |  |    _ButtonOpenProjClick()
+02796  |  v--|----ExitLoop
+02797  |  |  +-EndIf
+02798  |  +-Next
+02799  +-EndIf
+02800    
+02801    ; Create the GUI.
+02802    ConsoleWrite($MY_NAME & ": Generating GUI..." & @CRLF)
+02803    Dim $sCaption = $MY_NAME & " v" & _GetMyVersion()
+02804    $FormMain = GUICreate($sCaption, 633, 420, 192, 124)
+02805    GUISetOnEvent($GUI_EVENT_CLOSE, "_OnFormMainClose")
+02806    $TabMain = GUICtrlCreateTab(8, 8, 617, 369)
+02807    GUICtrlSetResizing($TabMain, $GUI_DOCKWIDTH + $GUI_DOCKHEIGHT)
+02808    $TabSheet1 = GUICtrlCreateTabItem("Type and Name")
+02809    $GroupType = GUICtrlCreateGroup("Project Type", 24, 40, 233, 73)
+02810    $RadioLib = GUICtrlCreateRadio("Library", 136, 64, 113, 17)
+02811    GUICtrlSetOnEvent($RadioLib, "_RadioLibClick")
+02812    $RadioApp = GUICtrlCreateRadio("Application", 40, 64, 81, 17)
+02813    GUICtrlSetState($RadioApp, $GUI_CHECKED)
+02814    GUICtrlSetOnEvent($RadioApp, "_RadioAppClick")
+02815    $CheckboxHasGui = GUICtrlCreateCheckbox("GUI Application", 40, 88, 97, 17)
+02816    GUICtrlCreateGroup("", -99, -99, 1, 1)
+02817    $GroupName = GUICtrlCreateGroup("Name and Location", 24, 120, 585, 225)
+02818    $InputProjName = GUICtrlCreateInput("", 136, 152, 385, 21)
+02819    GUICtrlSetOnEvent($InputProjName, "_InputProjNameChange")
+02820    $LabelName = GUICtrlCreateLabel("Name:", 40, 152, 35, 17)
+02821    $InputLocation = GUICtrlCreateInput("", 136, 184, 337, 21)
+02822    GUICtrlSetOnEvent($InputLocation, "_InputLocationChange")
+02823    $ButtonProjectBrowse = GUICtrlCreateButton("...", 480, 184, 35, 25, $WS_GROUP)
+02824    GUICtrlSetFont($ButtonProjectBrowse, 8, 800, 0, "MS Sans Serif")
+02825    GUICtrlSetOnEvent($ButtonProjectBrowse, "_ButtonProjectBrowseClick")
+02826    $LabelProjectsDir = GUICtrlCreateLabel("Projects Directory:", 40, 184, 90, 17)
+02827    $LabelFullPath = GUICtrlCreateLabel("Project Path:", 40, 240, 65, 17)
+02828    $InputFullPath = GUICtrlCreateInput("", 136, 240, 385, 21)
+02829    GUICtrlSetState($InputFullPath, $GUI_DISABLE)
+02830    $CheckboxMakeDefault = GUICtrlCreateCheckbox("This directory is the default for all projects", 136, 208, 225, 17)
+02831    GUICtrlSetOnEvent($CheckboxMakeDefault, "_CheckboxMakeDefaultClick")
+02832    $InputMainScript = GUICtrlCreateInput("", 136, 272, 177, 21)
+02833    $LabelMainScript = GUICtrlCreateLabel("Main Script Name:", 40, 272, 91, 17)
+02834    $InputConfigName = GUICtrlCreateInput("", 136, 304, 177, 21)
+02835    GUICtrlSetState($InputConfigName, $GUI_DISABLE)
+02836    $LabelConfigName = GUICtrlCreateLabel("Config File Name:", 40, 304, 87, 17)
+02837    $CheckboxUseConfig = GUICtrlCreateCheckbox("Create/Use Configuration File", 328, 304, 169, 17)
+02838    GUICtrlSetOnEvent($CheckboxUseConfig, "_CheckboxUseConfigClick")
+02839    GUICtrlCreateGroup("", -99, -99, 1, 1)
+02840    $ButtonOpenProj = GUICtrlCreateButton("Open Project", 504, 56, 99, 25, $WS_GROUP)
+02841    GUICtrlSetOnEvent($ButtonOpenProj, "_ButtonOpenProjClick")
+02842    $TabSheet2 = GUICtrlCreateTabItem("References")
+02843    $ListViewSourceLibs = GUICtrlCreateListView("AutoItV3 Standard Includes", 24, 56, 250, 230, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $LVS_SORTASCENDING, $WS_VSCROLL), BitOR($WS_EX_CLIENTEDGE, $LVS_EX_TRACKSELECT, $LVS_EX_FULLROWSELECT))
+02844    GUICtrlSendMsg($ListViewSourceLibs, $LVM_SETCOLUMNWIDTH, 0, 225)
+02845    $ListViewTargetLibs = GUICtrlCreateListView("Project Includes", 360, 56, 250, 230, BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $LVS_SORTASCENDING, $WS_VSCROLL), BitOR($WS_EX_CLIENTEDGE, $LVS_EX_TRACKSELECT, $LVS_EX_FULLROWSELECT))
+02846    GUICtrlSendMsg($ListViewTargetLibs, $LVM_SETCOLUMNWIDTH, 0, 240)
+02847    $ButtonAddLib = GUICtrlCreateButton("Add -->", 280, 104, 75, 25, $WS_GROUP)
+02848    GUICtrlSetOnEvent($ButtonAddLib, "_ButtonAddLibClick")
+02849    $ButtonRemoveLib = GUICtrlCreateButton("<-- Remove", 280, 160, 75, 25, $WS_GROUP)
+02850    GUICtrlSetOnEvent($ButtonRemoveLib, "_ButtonRemoveLibClick")
+02851    $ButtonBrowseLib = GUICtrlCreateButton("Browse Other...", 360, 296, 99, 25, $WS_GROUP)
+02852    GUICtrlSetOnEvent($ButtonBrowseLib, "_ButtonBrowseLibClick")
+02853    $ComboCopyPolicy = GUICtrlCreateCombo("", 24, 328, 145, 25, BitOR($CBS_DROPDOWNLIST, $CBS_AUTOHSCROLL))
+02854    GUICtrlSetData($ComboCopyPolicy, "If Newer|Always (Overwrite)|If Not Exist In Project", "If Newer")
+02855    $LabelCopyLibPolicy = GUICtrlCreateLabel("Copy Non-Standard Includes Policy:", 24, 304, 174, 17)
+02856    $TabSheet3 = GUICtrlCreateTabItem("Details")
+02857    $LabelAutoItVer = GUICtrlCreateLabel("AutoItV3 Version:", 24, 48, 86, 17)
+02858    $InputAuthor = GUICtrlCreateInput("", 144, 80, 369, 21)
+02859    $LabelAuthor = GUICtrlCreateLabel("Author:", 24, 80, 38, 17)
+02860    $LabelScriptVer = GUICtrlCreateLabel("Script Version:", 24, 112, 72, 17)
+02861    $InputAutoItVer = GUICtrlCreateInput("", 144, 48, 121, 21)
+02862    $InputScriptVer = GUICtrlCreateInput("", 144, 112, 121, 21)
+02863    $LabelDate = GUICtrlCreateLabel("Date:", 24, 144, 30, 17)
+02864    $LabelDateModified = GUICtrlCreateLabel("Modfied:", 24, 176, 45, 17)
+02865    $InputCompany = GUICtrlCreateInput("", 144, 208, 209, 21)
+02866    $LabelCompany = GUICtrlCreateLabel("Company:", 24, 208, 51, 17)
+02867    $InputCopyright = GUICtrlCreateInput("", 144, 240, 369, 21)
+02868    $LabelCopyright = GUICtrlCreateLabel("Copyright:", 24, 240, 51, 17)
+02869    $EditDescription = GUICtrlCreateEdit("", 144, 272, 465, 89, BitOR($ES_AUTOVSCROLL, $ES_AUTOHSCROLL, $ES_WANTRETURN, $WS_VSCROLL))
+02870    GUICtrlSetData($EditDescription, "")
+02871    $LabelDescription = GUICtrlCreateLabel("Description/Function:", 24, 272, 106, 17)
+02872    $DateCreated = GUICtrlCreateDate(_NowCalcDate(), 144, 144, 186, 21)
+02873    $DateModified = GUICtrlCreateDate(_NowCalcDate(), 144, 176, 186, 21)
+02874    $CheckboxRequireAdmin = GUICtrlCreateCheckbox("Require admin", 24, 344, 97, 17)
+02875    $ButtonCurrDateNow = GUICtrlCreateButton("Now", 336, 144, 43, 25, $WS_GROUP)
+02876    GUICtrlSetOnEvent($ButtonCurrDateNow, "_ButtonCurrDateNowClick")
+02877    $ButtonModDateNow = GUICtrlCreateButton("Now", 336, 176, 43, 25, $WS_GROUP)
+02878    GUICtrlSetOnEvent($ButtonModDateNow, "_ButtonModDateNowClick")
+02879    GUICtrlCreateTabItem("")
+02880    $ButtonCancel = GUICtrlCreateButton("Cancel", 552, 384, 75, 25, $WS_GROUP)
+02881    GUICtrlSetOnEvent($ButtonCancel, "_ButtonCancelClick")
+02882    $ButtonCreate = GUICtrlCreateButton("Create Project", 248, 384, 123, 25, $WS_GROUP)
+02883    GUICtrlSetOnEvent($ButtonCreate, "_ButtonCreateClick")
+02884    GUISetState(@SW_SHOW)
+02885    
+02886    ; Init default control states.
+02887    _ResetForm()
+02888    
+02889    ; Load the project if one was specified and the file if it exists.
+02890  +-If ((StringLen($projectFile) > 0) And (FileExists($projectFile))) Then
+02891  |  +-If (Not $iWasLoaded) Then
+02892  |  |    ConsoleWrite($MY_NAME & ": Loading project file: " & $projectFile & @CRLF)
+02893  |  +-EndIf
+02894  |  +-If (_LoadProject($projectFile)) Then
+02895  |  |    $iWasLoaded = True
+02896  |  |    GUICtrlSetData($ButtonCreate, "Save and Load")
+02897  |  +-EndIf
+02898  +-EndIf
+02899    
+02900    ; Register WM_NOTIFY events.
+02901    ; CB_TODO - FIXME:
+02902    ; This used to work.... now suddenly it doesn't.... the events are fired and handled by
+02903    ; _WM_Notify_events, but we never recieve the expected message ID.
+02904    GUIRegisterMsg($WM_NOTIFY, "_WM_Notify_Events")
+02905    
+02906    ; Enter the message loop.
+02907  +-While 1
+02908  |    Sleep(100)
+02909  +-WEnd
+02910    
+02911    ; We should never actually get here.
+02912    Exit
+02913    #EndRegion Main Script
+
+======================
+=== xref reports =====
+======================
+
+== User functions =================================================================================================
+                          Func
+Function name             Row     Referenced at Row(s)
+========================= ====== ==================================================================================
+_ButtonAddLibClick        01942  02754
+_ButtonBrowseLibClick     01990 
+_ButtonCancelClick        02139 
+_ButtonCreateClick        02157 
+_ButtonCurrDateNowClick   02697 
+_ButtonModDateNowClick    02716 
+_ButtonOpenProjClick      02606  02795
+_ButtonProjectBrowseClick  01916 
+_ButtonRemoveLibClick     02088  02759
+_CheckboxMakeDefaultClick  02432 
+_CheckboxUseConfigClick   02663 
+_ClearSourceLibs          01130  02526
+_ClearTargetLibs          01154  01187 02527
+_CopyLibs                 01832  02396
+_CreateApplicationConfig  00263  02298
+_CreateNewProjectFile     01484  01579
+_DisplayAutoItStandardLibs  01091  01186
+_EditScript               01669  02405
+_GenerateScript           00884  02323 02356
+_GetAppConfigGenerationResult  01732  02301
+_GetAutoItIncludesDir     00981  01093 01274
+_GetAutoItPath            00944  00984 01012
+_GetMyVersion             00180  00274 01491 02803
+_GetProjectGenerationResult  01792  02316 02349
+_GetReferences            00228  02260
+_GetSciteExec             01009  01676
+_GetScriptEditResult      01703  02407
+_GetScriptGenerationResult  01761  02325 02358
+_InputLocationChange      02489  01923
+_InputProjNameChange      02463 
+_LoadDetailsFromProject   01315  01464
+_LoadGlobalConfig         01036  01203
+_LoadProject              01380  02631 02894
+_LoadReferencesFromProject  01220  01461
+_ModifyScript             00614  00908
+_MultiLineDescriptionToArray  00312  00425 00509 00654
+_OnFormMainClose          02523  02140 02415
+_ProjectInfoArrayInit     00200  02256
+_RadioAppClick            02548 
+_RadioLibClick            02575 
+_ResetForm                01178  01386 01402 01410 01417 01431 02629 02887
+_SaveGlobalConfig         01064  02525
+_WM_Notify_Events         02738 
+_WriteApplicationScript   00398  00920
+_WriteLibScript           00498  00918
+_WriteProjectFile         01560  02314 02347
+
+#### indicates that this specific variable only occurs one time in the script.
+---- indicates that this specific variable isn't declared with Dim/Local/Global/Const.
+
+== Variables ======================================================================================================
+Variable name             Dim   Used in Row(s)
+========================= ===== ===================================================================================
+$ButtonAddLib             00129 02847 02848
+$ButtonBrowseLib          00131 02851 02852
+$ButtonCancel             00149 02880 02881
+$ButtonCreate             00150 02201 02635 02882 02883 02896
+$ButtonCurrDateNow        00161 02875 02876
+$ButtonModDateNow         00162 02877 02878
+$ButtonOpenProj           00155 02840 02841
+$ButtonProjectBrowse      00121 01044 02436 02443 02823 02824 02825
+$ButtonRemoveLib          00130 02849 02850
+$CBS_AUTOHSCROLL          ----- 02853
+$CBS_DROPDOWNLIST         ----- 02853
+$CONFIG                   00092 01037 01038 01041 01067 01069 01071 02612 02613
+$CP_ALWAYS                00103 01456 01602 01849 02390
+$CP_IFNEWER               00102 01456 01602 01832 01853 02387
+$CP_IFNOTEXIST            00104 01456 01602 01878 02392
+$CheckboxHasGui           00154 01198 01358 01360 02286 02556 02583 02815
+$CheckboxMakeDefault      00125 01042 01068 01183 02433 02439 02830 02831
+$CheckboxRequireAdmin     00153 01197 01352 01354 02292 02555 02582 02874
+$CheckboxUseConfig        00158 01199 01450 02236 02557 02584 02585 02588 02664 02837 02838
+$CmdLine                  ----- 02781 02782 02783 02784 02793
+$ComboCopyPolicy          00159 01202 01457 01601 02388 02853 02854
+$DateCreated              00147 01192 01346 02274 02551 02578 02698 02872
+$DateModified             00148 01193 01347 02275 02552 02579 02717 02873
+$ES_AUTOHSCROLL           ----- 02869
+$ES_AUTOVSCROLL           ----- 02869
+$ES_WANTRETURN            ----- 02869
+$EditDescription          00145 00211 01196 01350 02869 02870
+$FormMain                 00111 01918 01999 02528 02529 02626 02804
+$GUI_CHECKED              ----- 01042 01068 01179 01352 01358 01393 01442 01450 02236 02267 02286 02292 02433 02585 
+                                02664 02813
+$GUI_DISABLE              ----- 01043 01044 01201 02435 02436 02576 02577 02578 02579 02580 02581 02582 02583 02584 
+                                02587 02588 02678 02829 02835
+$GUI_DOCKHEIGHT           ----- 02807
+$GUI_DOCKWIDTH            ----- 02807
+$GUI_ENABLE               ----- 01182 01198 01449 01450 02442 02443 02549 02550 02551 02552 02553 02554 02555 02556 
+                                02557 02665
+$GUI_EVENT_CLOSE          ----- 02805
+$GUI_FOCUS                ----- 02163 02171 02185 02205 02218 02228 02240
+$GUI_UNCHECKED            ----- 01183 01197 01198 01199 01354 01360 02439 02582 02588
+$GroupName                00117 02817
+$GroupType                00114 02809
+$HOME                     00091 00092 01236 01993 02002
+$InputAuthor              00134 00204 01190 01344 02858
+$InputAutoItVer           00137 01189 01343 02271 02549 02576 02861
+$InputCompany             00141 01194 01348 02281 02553 02580 02865
+$InputConfigName          00156 01200 01201 01448 01449 02237 02240 02586 02587 02665 02666 02675 02678 02834 02835
+$InputCopyright           00143 01195 01349 02282 02554 02581 02867
+$InputFullPath            00124 01184 01238 01239 01425 01592 02003 02176 02470 02504 02828 02829
+$InputLocation            00120 01040 01043 01065 01181 01182 01682 01922 02168 02171 02228 02434 02435 02442 02465 
+                                02490 02610 02821 02822
+$InputMainScript          00151 01185 01439 01593 02028 02049 02182 02185 02464 02491 02496 02832
+$InputProjName            00118 00206 01180 01398 02160 02163 02205 02218 02464 02470 02492 02668 02818 02819
+$InputScriptVer           00138 01191 01345 02272 02550 02577 02862
+$LVM_SETCOLUMNWIDTH       ----- 02844 02846
+$LVS_EX_FULLROWSELECT     ----- 02843 02845
+$LVS_EX_TRACKSELECT       ----- 02843 02845
+$LVS_REPORT               ----- 02843 02845
+$LVS_SHOWSELALWAYS        ----- 02843 02845
+$LVS_SORTASCENDING        ----- 02843 02845
+$LabelAuthor              00135 02859
+$LabelAutoItVer           00133 02857
+$LabelCompany             00142 02866
+$LabelConfigName          00157 02836
+$LabelCopyLibPolicy       00160 02855
+$LabelCopyright           00144 02868
+$LabelDate                00139 02863
+$LabelDateModified        00140 02864
+$LabelDescription         00146 02871
+$LabelFullPath            00123 02827
+$LabelMainScript          00152 02833
+$LabelName                00119 02820
+$LabelProjectsDir         00122 02826
+$LabelScriptVer           00136 02860
+$ListViewSourceLibs       00127 01096 01131 01228 01946 02092 02751 02843 02844
+$ListViewTargetLibs       00128 00231 01155 01188 01229 01947 02012 02093 02756 02845 02846
+$MY_NAME                  00090 00092 00274 01266 01277 01385 01400 01409 01416 01430 01485 01491 01492 01561 01887 
+                                02030 02051 02158 02162 02170 02184 02196 02198 02204 02214 02227 02239 02250 02269 
+                                02306 02308 02317 02318 02326 02327 02345 02350 02351 02359 02360 02398 02399 02404 
+                                02408 02409 02438 02630 02779 02786 02787 02802 02803 02892
+$MsgID                    ----- 02738
+$NM_DBLCLK                ----- 02753 02758
+$PROJECT_FILE_EXT         00093 01568 02197 02626 02785
+$PROJ_TYPE_APP            00097 01497 01589
+$PROJ_TYPE_LIB            00098 01392 01587
+$RadioApp                 00116 01179 01442 02267 02812 02813 02814
+$RadioLib                 00115 01393 02810 02811
+$TabMain                  00112 02806 02807
+$TabSheet1                00113 02808
+$TabSheet2                00126 02842
+$TabSheet3                00132 02856
+$WM_NOTIFY                ----- 02524 02904
+$WS_EX_CLIENTEDGE         ----- 02843 02845
+$WS_GROUP                 ----- 02823 02840 02847 02849 02851 02875 02877 02880 02882
+$WS_VSCROLL               ----- 02843 02845 02869
+$aCreatedMonth            02274 02276 02278
+$aDescLines               00314 00425 00509 00654 00315 00345 00346 00352 00353 00355 00357 00361 00426 00427 00510 
+                                00511 00655 00656 00675 00682 00690 00692 00703
+$aDirs                    02262 02332 02333 02334 02335 02336 02337 02338 02341 02342 02365 02366 02367 02368 02369 
+                                02370 02371 02374 02375
+$aFiles                   02025 02026 02027 02046
+$aKeys                    01610 01611 01612 01613
+$aLibs                    01103 01223 01104 01105 01106 01107 01224 01233 01235 01266 01274 01277 01281 01287
+$aLines                   00323 00616 00324 00325 00624 00627 00628 00630 00631 00634 00635 00636 00637 00638 00639 
+                                00640 00641 00642 00644 00669 00670 00682 00683 00690 00692 00698 00700 00711 00724 
+                                00726 00733 00734 00735 00736 00737 00738 00748 00754 00755 00763 00767 00768 00774 
+                                00775 00782 00784 00795 00799 00801 00803 00804 00805 00813 00820 00821 00841 00842 
+                                00850
+$aModifiedMonth           02275 02277 02279
+$aProjectInfo             00201 02256 00202 00203 00204 00205 00206 00207 00208 00209 00210 00211 00212 00263 00264 
+                                00275 00398 00408 00409 00414 00415 00416 00417 00418 00419 00420 00421 00425 00449 
+                                00498 00505 00509 00514 00567 00614 00628 00631 00635 00636 00637 00638 00639 00640 
+                                00641 00642 00654 00884 00901 00908 00918 00920 01560 01573 01591 01624 01625 01626 
+                                01627 01628 01629 01630 01632 02257 02271 02272 02276 02277 02281 02282 02298 02314 
+                                02323 02347 02356 02413
+$aReferences              00230 00234 02260 00235 00237 00238 00239 00243 00398 00436 00438 00439 00498 00519 00522 
+                                00523 00614 00793 00832 00833 00834 00884 00908 00918 00920 01560 01618 01619 01620 
+                                01832 01833 01840 01842 02314 02323 02347 02356 02396 02398 02414
+$aRegions                 00715 00723 00724 00740
+$aSection                 01383 01384 01390
+$aSelectedIndices         01952 02098 01953 01955 01956 01963 01964 01970 02099 02102 02103 02112 02113 02119
+$aSourceTime              01857 01858 01861
+$aTargetTime              01864 01865 01868
+#### $code                02741
+$event                    02741 02744 02749 02752 02757 02763
+$fileIdx                  01839 01840 01842 01889
+$flagCopy                 01845 01851 01872 01888
+$hFile                    00269 00848 00911 00270 00274 00275 00276 00277 00278 00279 00280 00281 00282 00849 00850 
+                                00851 00852 00912 00918 00920 00924 00925
+$hFileHandle              ----- 00398 00399 00402 00404 00405 00408 00409 00410 00411 00412 00413 00414 00415 00416 
+                                00417 00418 00419 00420 00421 00427 00430 00431 00432 00433 00440 00443 00446 00447 
+                                00448 00449 00450 00452 00454 00455 00456 00457 00458 00459 00460 00461 00462 00463 
+                                00467 00468 00469 00470 00473 00474 00475 00476 00477 00498 00499 00500 00501 00504 
+                                00505 00511 00514 00515 00516 00520 00523 00525 00526 00530 00531 00532 00533 00536 
+                                00537 00538 00539 00542 00543 00544 00545 00548 00549 00550 00551 00554 00555 00556 
+                                00557 00560 00561 00562 00563 00564 00565 00566 00567 00568 00569 00570 00571 00572 
+                                00573 00574 00575 00576 00577
+$hProjFileHandle          01486 01487 01491 01492 01493 01494 01495 01496 01497 01498 01499 01500 01501 01502 01503 
+                                01504 01505 01506 01507 01508 01509 01510 01511 01512 01513 01514 01515 01516 01517 
+                                01518 01519 01520 01521 01522 01523 01524 01525 01526 01527 01528 01529 01530 01531
+$hSrcHandle               01096 01131 01155 01228 01946 02092 01097 01099 01100 01107 01110 01112 01132 01133 01134 
+                                01135 01137 01156 01157 01158 01159 01161 01230 01287 01289 01293 01295 01949 01952 
+                                01956 01962 01964 01969 01972 02095 02105 02106 02117 02120
+$hTargHandle              00231 01229 01947 02012 02093 00232 00239 00242 01231 01285 01294 01296 01950 01957 01958 
+                                01968 01971 02013 02042 02043 02063 02064 02067 02068 02096 02098 02103 02111 02113 
+                                02118 02121
+$hWndGUI                  ----- 02738
+#### $hwndFrom            02741
+$i                        00424 00508 01943 02089 02780 00426 00427 00438 00439 00510 00511 01955 01956 01963 01964 
+                                02102 02103 02112 02113 02782 02783 02784 02793
+$iCopyMode                ----- 01832 01848
+$iHasConfig               02234 02251 02297
+$iHasGui                  01336 02285 00398 00466 00614 00713 00745 00884 00908 00920 01338 01357 01560 01638 02287 
+                                02314 02323
+$iOpenFromCmdLine         00109 02641 02794
+$iProceed                 01846 01874 01881 01886
+$iRequireAdmin            01326 02291 00398 00401 00614 00765 00772 00884 00908 00920 01328 01351 01560 01644 02293 
+                                02314 02323
+$iWasLoaded               00108 00907 01994 02632 02891 02895
+$idx                      00521 01102 00522 00523 01106 01107
+$isLib                    ----- 00312 00329 00337 00354 00614 00626 00649 00654 00689 00697 00710 00798 00884 00908 
+                                00917 01560 01586
+$j                        02023 02026 02027
+$k                        01609 01612 01613 01619 01620
+$lParam                   ----- 02738 02742 02764
+$nCopyMode                01455 01456 01457
+$nDirNum                  02263 02336 02337 02338 02369 02370 02371
+$nElementCount            00621 00664 00668 00746 00750 00753 00811 00815 00819
+$nEndIndex                00620 00630 00631 00644 00650 00663 00748 00749 00792 00813 00814
+$nError                   02300 02301 02302 02307
+$nGlobalConstIdx          00782 00783 00784
+$nHeaderStart             00619 00627 00628 00629 00634 00635 00636 00637 00638 00639 00640 00641 00642 00643 00690 
+                                00692 00698 00700
+$nIncludesRegionIndex     00790 00795 00796 00812
+$nInsertPosition          00618 00629 00630 00643 00644 00661 00663 00669 00678 00682 00708 00726 00732 00733 00734 
+                                00735 00736 00737 00762 00799 00801 00803 00804 00806
+$nLocatedIndex            01287 01288 01289
+$nPolicy                  01601 01602 01603
+$nProjType                01391 01392
+$nRefCount                00229 00236 00238 00239 00668 00753 00814
+$nRefIdx                  00322 00617 00324 00325 00328 00663 00675 00677 00682 00723 00724 00749 00819 00833 00834
+$nRegionIndex             00709 00711 00712 00724 00725 00726 00747 00748 00749 00754 00763 00764 00774
+$nResultCode              ----- 01703 01705 01706 01732 01734 01735 01761 01763 01764 01792 01794 01795
+$nStartPosition           00791 00806 00812 00813 00814 00820 00841
+$nTotalReferences         00232 00233 00236
+$pSourceTime              01860 01871
+$pTargetTime              01867 01871
+$policy                   02387 02390 02392 02396
+$projectFile              00110 00835 01995 02633 02784 02785 02786 02788 02890 02892 02894
+$result                   01682 01683
+$sAuthor                  01318 01344
+$sAutoItPath              00945 00984 01012 00946 00948 00949 00952 00953 00955 00961 00962 00964 00985 00987 01013 
+                                01015
+$sAutoItVer               01317 01343
+$sBaseDir                 01038 01039 01040
+$sCaption                 02803 02804
+$sCompany                 01322 01348
+$sConfigFile              01443 02235 01444 01445 01446 01448 02237 02238 02244 02246 02249 02250 02297 02298 02314 
+                                02323
+$sConfigName              02666 00398 00451 00452 00614 00781 00784 00884 00908 00920 01560 01595 01596 02667 02668 
+                                02670 02671 02673 02675
+$sConfigPath              ----- 00263 00268 00269
+$sCopyMode                02388 02389 02391
+$sCopyright               01323 01349
+$sDateCreated             01320 01346
+$sDateModified            01321 01347
+$sDescLine                00321 00325 00326 00330 00332 00338 00339 00342 00345
+$sDescription             01324 01632 00312 00317 00319 00323 00355 00357 01331 01332 01350 01633 01634 01636
+$sDistDir                 02379 02380 02381
+$sErrMsg                  02264 02301 02303 02306 02308 02316 02317 02318 02325 02326 02327 02349 02350 02351 02358 
+                                02359 02360 02407 02408 02409
+$sExtension               02244 02671 02245 02672
+$sFile                    01838 01842 01843 01844 01847 01857 01887 01888
+$sFilePath                02024 02027 02028 02035 02036 02039
+$sHasGui                  01335 01337
+$sIncludesPath            00983 00987 00988 00989 00992
+$sItemText                01944 02090 01956 01957 01958 02103 02104 02105 02106
+$sLib                     00830 00834 00837 00838 00841
+$sLibDir                  02265 02341 02374 02385 02396 02398
+$sLibStr                  00437 00439 00440
+$sLibToAdd                02015 02037 02039 02042 02043 02058 02060 02063 02064
+$sLibsDir                 01093 01094 01105
+$sLocalLib                01225 01235 01253 01255 01257 01258 01260 01264 01271 01272 01274 01275 01281 01285
+$sMainScript              01428 02182 01429 01436 01437 01439 02183 02190 02191 02195
+$sMainScriptName          02491 02493 02495 02496 02500
+$sParent                  01236 02002 01245 01248 01249 01258 01260 01271 02005 02006 02007 02035 02036 02056 02057
+$sProjDir                 02613 02614 02615 02616
+$sProjName                01397 02160 01398 01399 02161 02197 02257
+$sProjPath                00831 01407 00835 00837 00838 01408 01415 01416 01422 01423 01425
+$sProject                 02626 02627 02628 02630 02631 02633 02634
+$sProjectFile             ----- 01220 01222 01223 01241 01315 01316 01317 01318 01319 01320 01321 01322 01323 01324 
+                                01325 01335 01380 01382 01383 01391 01397 01407 01428 01443 01455 01461 01464
+$sProjectFilePath         02197 01484 01486 01560 01563 01568 01578 01579 01587 01589 01591 01592 01593 01596 01598 
+                                01603 01605 01610 01613 01620 01624 01625 01626 01627 01628 01629 01630 01636 01639 
+                                01641 01645 01647 02198 02213 02216 02314 02347
+$sProjectHome             02176 02177 02178 02195 02197 02203 02225 02226 02227 02249 02333 02334 02335 02367 02368 
+                                02379
+$sProjectName             02492 02494 02495 02504
+$sProjectParent           02168 02169
+$sProjectsDir             01065 01918 02465 02490 01066 01067 01919 01922 02466 02467 02468 02470 02500 02501 02502 
+                                02504
+$sRelativePath            02014 02036 02037 02057 02058
+$sRequireAdmin            01325 01327
+$sResult                  01704 01733 01762 01793 01708 01710 01712 01715 01737 01739 01741 01744 01766 01768 01770 
+                                01772 01775 01797 01799 01801 01803 01806
+$sSciteExec               01011 01015 01016 01017 01020
+$sSciteExecPath           01676 01677 01682
+$sScript                  ----- 01669 01671 01682
+$sScriptPath              02195 00614 00615 00624 00848 02196 02323 02356 02405
+$sScriptVer               01319 01345
+$sSelectedLib             01999 02000 02018 02025 02049 02056 02057 02060
+$sStartDir                02610 02611 02615 02621 02622 02626
+$sTarget                  ----- 01832 01834 01835 01847 01887 01888
+$sTargetFile              01847 01855 01864 01880
+$sTemp                    01237 02003 01239 01241 01244 01245 02004 02005
+$scriptPath               ----- 00884 00886 00891 00896 00897 00908 00911
+$startDir                 01993 01995 01999
+$tSourceTime              01858 01860
+$tTargetTime              01865 01867
+$tagNMLISTVIEW            02741 02742 02744 02762
+$wParam                   ----- 02738 02750
+$x                        01226 01233 01235 01266 01274 01277 01281 01287
+@AutoItExe                ----- 00182
+@AutoItVersion            ----- 01189 01317 01515
+@CRLF                     ----- 00319 00323 01332 01400 01416 01485 01561 01633 01634 01887 02158 02196 02198 02214 
+                                02227 02250 02269 02306 02308 02317 02318 02326 02327 02345 02350 02351 02359 02360 
+                                02398 02404 02408 02409 02630 02740 02749 02779 02786 02802 02892
+@Compiled                 ----- 00181 02772
+@MyDocumentsDir           ----- 01918 02622
+@OSArch                   ----- 00951
+@ProgramFilesDir          ----- 00948
+@SW_SHOW                  ----- 02884
+@ScriptDir                ----- 00091
+@ScriptFullPath           ----- 00184
+@TAB                      ----- 00342 00357 00414 00415 00416 00417 00418 00419 00420 00421 00575 00635 00636 00637 
+                                00638 00639 00640 00641 00642 00700
+@UserName                 ----- 01190
+@error                    ----- 00946 00953 01224 01384 01580 01611 01919 02000 02299 02300 02315 02316 02324 02325 
+                                02348 02349 02357 02358 02397 02406 02407 02627 02743
+@extended                 ----- 02398
